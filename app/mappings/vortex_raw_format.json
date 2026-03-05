@@ -1,0 +1,55 @@
+{
+    "project": "Vortex Raw Case",
+    "version": "1.0",
+    "detection": {
+        "required_headers": [
+            "Date of Service",
+            "Client",
+            "Clinician",
+            "Billing Code",
+            "Primary Insurance"
+        ],
+        "optional_headers": [
+            "Secondary Insurance",
+            "Rate per Unit",
+            "Units",
+            "Total Fee",
+            "Client Payment Status",
+            "Charge",
+            "Uninvoiced",
+            "Paid",
+            "Unpaid",
+            "Insurance Payment Status"
+        ]
+    },
+    "column_mappings": {
+        "Client": "client_name",
+        "Clinician": "provider_name",
+        "Primary Insurance": "payor_name",
+        "Date of Service": "dos",
+        "Billing Code": "cpt",
+        "Units": "units",
+        "Rate per Unit": "unit_rate",
+        "Total Fee": "balance",
+        "Paid": "patient_paid",
+        "Unpaid": "patient_res"
+    },
+    "derived_fields": {
+        "billed_date": {
+            "type": "copy",
+            "source": "Date of Service"
+        },
+        "primary": {
+            "type": "static",
+            "value": ""
+        },
+        "adjustment": {
+            "type": "static",
+            "value": ""
+        },
+        "claim_id": {
+            "type": "static",
+            "value": ""
+        }
+    }
+}

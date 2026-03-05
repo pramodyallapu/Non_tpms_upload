@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoParser Pro | AI-Driven Excel Transformation</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">AutoParser Pro</div>
+        <div class="navbar-links">
+            <a href="/" class="active">Upload</a>
+            <a href="/projects">Projects</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Step 1: Upload -->
+        <div class="card" id="upload-card">
+            <div class="header-section">
+                <h2>Upload & Map Fields</h2>
+            </div>
+            <p>Upload a raw Excel file and visually drag columns into the standard format slots.</p>
+
+            <form id="upload-form">
+                <div class="upload-area" id="drop-zone">
+                    <span class="upload-icon">📄</span>
+                    <div id="file-name-display">Drop Excel Here or Click to Browse</div>
+                    <input type="file" name="file" id="file-input" required accept=".xlsx, .xls, .csv">
+                </div>
+                <button type="submit" id="upload-btn">Analyze & Map Fields</button>
+            </form>
+
+            <div class="features">
+                <div class="feature-item">Visual Field Dragging</div>
+                <div class="feature-item">AI-Suggested Mapping</div>
+                <div class="feature-item">Live UI Feedback</div>
+            </div>
+        </div>
+
+        <!-- Step 2: Visual Drag & Drop Mapping -->
+        <div class="card canvas-card" id="preview-card" style="display: none;">
+            <div class="preview-header">
+                <div>
+                    <h3>Drag & Drop Field Mapping</h3>
+                    <p style="margin: 0; font-size: 0.8rem; color: #94a3b8;">Drag raw columns (left) into the standard
+                        target slots (right). Click × to remove.</p>
+                </div>
+                <span id="detected-project-badge" class="badge">Detecting...</span>
+            </div>
+
+            <div class="mapping-workspace">
+                <div class="raw-pool">
+                    <label>Raw Columns from File</label>
+                    <div class="pool-container" id="raw-columns-pool"></div>
+                </div>
+
+                <div class="target-grid">
+                    <label>Standard Target Fields</label>
+                    <div class="grid-container" id="target-fields-grid"></div>
+                </div>
+            </div>
+
+            <div class="preview-actions">
+                <button class="btn-secondary" onclick="location.reload()">Reset</button>
+                <button id="process-btn" class="btn-primary">Generate Final Excel</button>
+            </div>
+        </div>
+
+        <div id="loading" class="overlay" style="display: none;">
+            <div class="spinner"></div>
+            <p>Processing...</p>
+        </div>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('upload-form');
+        const fileInput = document.getElementById('file-input');
+        const fileDisplay = document.getElementById('file-name-display');
+        const uploadCard = document.getElementById('upload-card');
+        const previewCard = document.getElementById('preview-card');
+        const loading = document.getElementById('loading');
+        let currentData = null;
+
+        fileInput.addEventListener('change', e => {
+            if (e.target.files.length > 0) {
+                fileDisplay.textContent = e.target.files[0].name;
+                fileDisplay.style.color = '#818cf8';
+                fileDisplay.style.fontWeight = 'bold';
+            }
+        });
+
+        uploadForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            loading.style.display = 'flex';
+            try {
+                const res = await fetch('/detect-mapping', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.error) { alert('Error: ' + data.error); return; }
+                currentData = data;
+                initDragDrop(data);
+                uploadCard.style.display = 'none';
+                previewCard.style.display = 'flex';
+            } catch (err) {
+                alert('Upload failed: ' + err.message);
+            } finally {
+                loading.style.display = 'none';
+            }
+        });
+
+        function initDragDrop(data) {
+            const rawPool = document.getElementById('raw-columns-pool');
+            const grid = document.getElementById('target-fields-grid');
+            document.getElementById('detected-project-badge').textContent = `Format: ${data.detected_project}`;
+            rawPool.innerHTML = '';
+            grid.innerHTML = '';
+
+            // Raw chips
+            data.raw_columns.forEach(col => {
+                const chip = document.createElement('div');
+                chip.className = 'raw-chip';
+                chip.draggable = true;
+                chip.textContent = col;
+                chip.id = 'chip-' + CSS.escape(col);
+                chip.dataset.rawname = col;
+                chip.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', col); chip.classList.add('dragging'); });
+                chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
+                rawPool.appendChild(chip);
+            });
+
+            // Target slots
+            data.standard_columns.forEach(target => {
+                const slot = document.createElement('div');
+                slot.className = 'target-slot';
+                slot.dataset.target = target;
+                slot.innerHTML = `
+                    <div class="slot-label">${target}</div>
+                    <div class="slot-dropzone" id="drop-${target}">
+                        <span class="placeholder">Drop Here</span>
+                    </div>`;
+                const dz = slot.querySelector('.slot-dropzone');
+                dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+                dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+                dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); assignColumn(e.dataTransfer.getData('text/plain'), target); });
+                grid.appendChild(slot);
+            });
+
+            // Auto-assign from AI
+            Object.entries(data.column_mappings).forEach(([raw, target]) => {
+                if (data.standard_columns.includes(target)) assignColumn(raw, target);
+            });
+            Object.entries(data.derived_fields).forEach(([target, rule]) => {
+                if (rule.type === 'copy' && data.raw_columns.includes(rule.source)) assignColumn(rule.source, target);
+            });
+        }
+
+        function assignColumn(rawName, targetName) {
+            const dz = document.getElementById('drop-' + targetName);
+            if (!dz) return;
+            // Release previous chip if any
+            if (dz.dataset.assignedRaw) markChipUsed(dz.dataset.assignedRaw, false);
+            dz.innerHTML = `
+                <div class="assigned-chip">
+                    ${rawName}
+                    <span class="remove-btn" onclick="clearSlot('${targetName}')">×</span>
+                </div>`;
+            dz.classList.add('filled');
+            dz.dataset.assignedRaw = rawName;
+            markChipUsed(rawName, true);
+        }
+
+        function markChipUsed(rawName, used) {
+            document.querySelectorAll('.raw-chip').forEach(c => {
+                if (c.dataset.rawname === rawName) c.classList.toggle('used', used);
+            });
+        }
+
+        window.clearSlot = targetName => {
+            const dz = document.getElementById('drop-' + targetName);
+            const raw = dz.dataset.assignedRaw;
+            dz.innerHTML = '<span class="placeholder">Drop Here</span>';
+            dz.classList.remove('filled');
+            delete dz.dataset.assignedRaw;
+            // Only unmark chip if assigned nowhere else
+            const stillUsed = [...document.querySelectorAll('.slot-dropzone.filled')].some(z => z.dataset.assignedRaw === raw);
+            if (!stillUsed) markChipUsed(raw, false);
+        };
+
+        document.getElementById('process-btn').addEventListener('click', async () => {
+            const filled = [...document.querySelectorAll('.slot-dropzone.filled')];
+            if (!filled.length) { alert('Please map at least one column!'); return; }
+            loading.style.display = 'flex';
+
+            const column_mappings = {};
+            filled.forEach(dz => { column_mappings[dz.dataset.assignedRaw] = dz.parentNode.dataset.target; });
+
+            try {
+                const res = await fetch('/process', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: currentData.filename,
+                        mapping: {
+                            type: currentData.type,
+                            column_mappings,
+                            derived_fields: currentData.derived_fields
+                        }
+                    })
+                });
+                const result = await res.json();
+                if (result.output_url) { window.location.href = result.output_url; setTimeout(() => location.reload(), 1500); }
+                else alert('Processing failed: ' + (result.error || 'Unknown error'));
+            } catch (e) {
+                alert('Process failed: ' + e.message);
+            } finally {
+                loading.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+
+</html>

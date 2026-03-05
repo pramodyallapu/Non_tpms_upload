@@ -1,0 +1,67 @@
+{
+    "project": "Insurance Aging Detail",
+    "version": "1.0",
+    "detection": {
+        "required_headers": [
+            "Patient Name <No.>",
+            "DOS",
+            "Total"
+        ],
+        "optional_headers": [
+            "Policy Number - Birth",
+            "Enc.",
+            "Charge",
+            "0-30",
+            "31-60",
+            "61-90",
+            "91-120",
+            "121-150",
+            "151+"
+        ]
+    },
+    "column_mappings": {
+        "Patient Name <No.>": "client_name",
+        "DOS": "dos",
+        "Enc.": "claim_id",
+        "Charge": "unit_rate",
+        "Total": "balance"
+    },
+    "derived_fields": {
+        "billed_date": {
+            "type": "copy",
+            "source": "DOS"
+        },
+        "primary": {
+            "type": "static",
+            "value": "YES"
+        },
+        "adjustment": {
+            "type": "static",
+            "value": 0
+        },
+        "patient_paid": {
+            "type": "static",
+            "value": 0
+        },
+        "patient_res": {
+            "type": "static",
+            "value": 0
+        },
+        "units": {
+            "type": "static",
+            "value": 1
+        },
+        "provider_name": {
+            "type": "static",
+            "value": ""
+        },
+        "payor_name": {
+            "type": "static",
+            "value": ""
+        },
+        "cpt": {
+            "type": "static",
+            "value": ""
+        }
+    }
+}

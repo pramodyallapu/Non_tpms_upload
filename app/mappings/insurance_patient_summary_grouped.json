@@ -1,0 +1,60 @@
+{
+    "project": "Insurance Patient Summary (Grouped)",
+    "version": "1.0",
+    "detection": {
+        "type": "stateful",
+        "required_headers": [
+            "Insurance Name",
+            "Patient Name",
+            "Balance"
+        ],
+        "optional_headers": [
+            "DOS",
+            "Charge",
+            "Address",
+            "Patient ID",
+            "Policy Num",
+            "Date of Birth",
+            "Notes",
+            "Enc."
+        ]
+    },
+    "column_mappings": {
+        "0": "payor_name",
+        "2": "client_name",
+        "3": "claim_id",
+        "6": "dos",
+        "9": "unit_rate",
+        "10": "balance"
+    },
+    "derived_fields": {
+        "provider_name": {
+            "type": "static",
+            "value": "na"
+        },
+        "cpt": {
+            "type": "static",
+            "value": "na"
+        },
+        "units": {
+            "type": "static",
+            "value": 1
+        },
+        "primary": {
+            "type": "static",
+            "value": ""
+        },
+        "adjustment": {
+            "type": "static",
+            "value": ""
+        },
+        "patient_paid": {
+            "type": "static",
+            "value": ""
+        },
+        "patient_res": {
+            "type": "static",
+            "value": ""
+        }
+    }
+}

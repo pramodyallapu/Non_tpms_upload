@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Mappings | AutoParser Pro</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="navbar-brand">AutoParser Pro</div>
+        <div class="navbar-links">
+            <a href="/">Upload</a>
+            <a href="/projects" class="active">Projects</a>
+        </div>
+    </nav>
+
+    <div class="page-container">
+        <div class="page-header">
+            <div>
+                <h1>Project Mappings</h1>
+                <p>Manage all your project-specific column mapping configurations stored in SQLite.</p>
+            </div>
+            <button class="btn-primary" id="btn-new-project">+ New Project</button>
+        </div>
+
+        <!-- Projects Table -->
+        <div class="table-card">
+            <table class="data-table" id="projects-table">
+                <thead>
+                    <tr>
+                        <th>Project Name</th>
+                        <th>Version</th>
+                        <th>Mapped Columns</th>
+                        <th>Created</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="projects-tbody">
+                    {% for p in projects %}
+                    <tr id="row-{{ p.id }}">
+                        <td><strong>{{ p.project_name }}</strong></td>
+                        <td>v{{ p.version }}</td>
+                        <td><span class="pill">{{ p.column_count }} fields</span></td>
+                        <td>{{ p.created_at }}</td>
+                        <td>
+                            <span class="status-badge {{ 'active' if p.is_active else 'inactive' }}"
+                                onclick="toggleProject({{ p.id }})" title="Click to toggle">
+                                {{ 'Active' if p.is_active else 'Inactive' }}
+                            </span>
+                        </td>
+                        <td class="actions-cell">
+                            <button class="btn-icon" title="Edit" onclick="openEdit({{ p.id }})">✏️</button>
+                            <button class="btn-icon danger" title="Delete"
+                                onclick="deleteProject({{ p.id }}, '{{ p.project_name }}')">🗑️</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not projects %}
+                    <tr>
+                        <td colspan="6" style="text-align:center; padding: 2rem; color: var(--text-muted);">
+                            No projects found. Click "+ New Project" to add one.
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ── Modal ─────────────────────────────────── -->
+    <div class="modal-overlay" id="modal-overlay" style="display:none">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">New Project Mapping</h3>
+                <button class="modal-close" onclick="closeModal()">×</button>
+            </div>
+
+            <form id="project-form" autocomplete="off">
+                <input type="hidden" id="edit-id">
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Project Name *</label>
+                        <input type="text" id="f-project-name" placeholder="e.g. Vortex Raw Format" required>
+                    </div>
+                    <div class="form-group" style="max-width:100px">
+                        <label>Version</label>
+                        <input type="text" id="f-version" value="1.0">
+                    </div>
+                </div>
+
+                <!-- Detection Headers -->
+                <div class="form-group">
+                    <label>Required Headers <small>(comma separated – used for auto-detection)</small></label>
+                    <textarea id="f-required-headers" rows="2"
+                        placeholder="Date of Service, Client, Billing Code"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Optional Headers <small>(comma separated)</small></label>
+                    <textarea id="f-optional-headers" rows="2"
+                        placeholder="Clinician, Primary Insurance, Units"></textarea>
+                </div>
+
+                <!-- Column Mappings -->
+                <div class="form-group">
+                    <label>Column Mappings</label>
+                    <p style="font-size:0.75rem; color: var(--text-muted); margin:4px 0 8px">
+                        Map each raw column name → standard field. Drag to reorder.
+                    </p>
+                    <div id="mapping-rows-container"></div>
+                    <button type="button" class="btn-add-row" onclick="addMappingRow()">+ Add Mapping Row</button>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Project</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading" class="overlay" style="display:none">
+        <div class="spinner"></div>
+    </div>
+
+    <script>
+        const modalOverlay = document.getElementById('modal-overlay');
+        const loading = document.getElementById('loading');
+        const STANDARD_COLUMNS = {{ standard_columns | tojson }};
+
+        // ── Open / Close Modal ──────────────────────
+
+        function openNewModal() {
+            document.getElementById('modal-title').textContent = 'New Project Mapping';
+            document.getElementById('edit-id').value = '';
+            document.getElementById('f-project-name').value = '';
+            document.getElementById('f-version').value = '1.0';
+            document.getElementById('f-required-headers').value = '';
+            document.getElementById('f-optional-headers').value = '';
+            document.getElementById('mapping-rows-container').innerHTML = '';
+            // Pre-add one row per standard column for convenience
+            STANDARD_COLUMNS.forEach(col => addMappingRow('', col));
+            modalOverlay.style.display = 'flex';
+        }
+
+        async function openEdit(id) {
+            loading.style.display = 'flex';
+            try {
+                const res = await fetch(`/api/projects/${id}`);
+                const p = await res.json();
+
+                document.getElementById('modal-title').textContent = 'Edit Project Mapping';
+                document.getElementById('edit-id').value = p.id;
+                document.getElementById('f-project-name').value = p.project_name;
+                document.getElementById('f-version').value = p.version;
+
+                const det = p.detection_config || {};
+                document.getElementById('f-required-headers').value = (det.required_headers || []).join(', ');
+                document.getElementById('f-optional-headers').value = (det.optional_headers || []).join(', ');
+
+                const container = document.getElementById('mapping-rows-container');
+                container.innerHTML = '';
+                const cm = p.column_mappings || {};
+                Object.entries(cm).forEach(([raw, target]) => addMappingRow(raw, target));
+                // Add empty rows for any standard columns not yet mapped
+                const mapped = Object.values(cm);
+                STANDARD_COLUMNS.filter(c => !mapped.includes(c)).forEach(col => addMappingRow('', col));
+
+                modalOverlay.style.display = 'flex';
+            } catch (e) {
+                alert('Failed to load project: ' + e);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function closeModal() {
+            modalOverlay.style.display = 'none';
+        }
+
+        // ── Mapping Rows ─────────────────────────────
+
+        function addMappingRow(rawVal = '', targetVal = '') {
+            const container = document.getElementById('mapping-rows-container');
+            const row = document.createElement('div');
+            row.className = 'mapping-row';
+            row.innerHTML = `
+                <input type="text" class="raw-input" placeholder="Raw column name" value="${rawVal}">
+                <span class="arrow-icon">→</span>
+                <select class="target-select">
+                    <option value="">-- ignore --</option>
+                    ${STANDARD_COLUMNS.map(c => `<option value="${c}" ${c === targetVal ? 'selected' : ''}>${c}</option>`).join('')}
+                </select>
+                <button type="button" class="btn-remove-row" onclick="this.parentNode.remove()">×</button>
+            `;
+            container.appendChild(row);
+        }
+
+        // ── Save ─────────────────────────────────────
+
+        document.getElementById('project-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loading.style.display = 'flex';
+
+            const id = document.getElementById('edit-id').value;
+            const rows = document.querySelectorAll('.mapping-row');
+
+            const column_mappings = {};
+            rows.forEach(row => {
+                const raw = row.querySelector('.raw-input').value.trim();
+                const target = row.querySelector('.target-select').value;
+                if (raw && target) column_mappings[raw] = target;
+            });
+
+            const payload = {
+                project_name: document.getElementById('f-project-name').value.trim(),
+                version: document.getElementById('f-version').value.trim() || '1.0',
+                detection_config: {
+                    required_headers: document.getElementById('f-required-headers').value.split(',').map(s => s.trim()).filter(Boolean),
+                    optional_headers: document.getElementById('f-optional-headers').value.split(',').map(s => s.trim()).filter(Boolean),
+                },
+                column_mappings,
+                derived_fields: {}
+            };
+
+            try {
+                const url = id ? `/api/projects/${id}` : '/api/projects';
+                const method = id ? 'PUT' : 'POST';
+                const res = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert('Error: ' + (err.detail || 'Unknown'));
+                    return;
+                }
+                closeModal();
+                location.reload();
+            } catch (e) {
+                alert('Failed to save: ' + e);
+            } finally {
+                loading.style.display = 'none';
+            }
+        });
+
+        // ── Toggle Active ─────────────────────────────
+
+        async function toggleProject(id) {
+            try {
+                const res = await fetch(`/api/projects/${id}/toggle`, { method: 'PATCH' });
+                const data = await res.json();
+                const badge = document.querySelector(`#row-${id} .status-badge`);
+                badge.textContent = data.is_active ? 'Active' : 'Inactive';
+                badge.className = `status-badge ${data.is_active ? 'active' : 'inactive'}`;
+            } catch (e) { alert('Toggle failed'); }
+        }
+
+        // ── Delete ────────────────────────────────────
+
+        async function deleteProject(id, name) {
+            if (!confirm(`Delete project "${name}"? This cannot be undone.`)) return;
+            loading.style.display = 'flex';
+            try {
+                await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+                document.getElementById(`row-${id}`).remove();
+            } catch (e) { alert('Delete failed'); }
+            finally { loading.style.display = 'none'; }
+        }
+
+        document.getElementById('btn-new-project').addEventListener('click', openNewModal);
+        modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+    </script>
+</body>
+
+</html>

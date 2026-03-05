@@ -1,0 +1,54 @@
+{
+  "project": "raw_excel_format_a",
+  "version": "1.1",
+
+  "detection": {
+    "required_headers": [
+      "Date of Service",
+      "Client",
+      "Billing Code"
+    ],
+    "optional_headers": [
+      "Clinician",
+      "Primary Insurance",
+      "Units",
+      "Rate per Unit"
+    ],
+    "minimum_match_percent": 60
+  },
+
+  "column_mappings": {
+    "Date of Service": "dos",
+    "Client": "client_name",
+    "Clinician": "provider_name",
+    "Billing Code": "cpt",
+    "Primary Insurance": "payor_name",
+    "Units": "units",
+    "Rate per Unit": "unit_rate",
+    "Paid": "patient_paid",
+    "Unpaid": "patient_res"
+  },
+
+  "derived_fields": {
+    "balance": {
+      "type": "formula",
+      "expression": "Total Fee - Paid"
+    },
+    "billed_date": {
+      "type": "copy",
+      "source": "Date of Service"
+    },
+    "primary": {
+      "type": "static",
+      "value": "YES"
+    },
+    "adjustment": {
+      "type": "static",
+      "value": 0
+    },
+    "claim_id": {
+      "type": "hash",
+      "fields": ["Client", "Date of Service", "Billing Code"]
+    }
+  }
+}

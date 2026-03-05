@@ -1,0 +1,40 @@
+{
+    "project": "Standardized Raw Case",
+    "version": "1.0",
+    "detection": {
+        "required_headers": [
+            "client_name",
+            "provider_name",
+            "payor_name",
+            "dos",
+            "cpt",
+            "units",
+            "unit_rate",
+            "balance",
+            "billed_date",
+            "primary",
+            "adjustment",
+            "patient_paid",
+            "patient_res",
+            "claim_id"
+        ],
+        "optional_headers": []
+    },
+    "column_mappings": {
+        "client_name": "client_name",
+        "provider_name": "provider_name",
+        "payor_name": "payor_name",
+        "dos": "dos",
+        "cpt": "cpt",
+        "units": "units",
+        "unit_rate": "unit_rate",
+        "balance": "balance",
+        "billed_date": "billed_date",
+        "primary": "primary",
+        "adjustment": "adjustment",
+        "patient_paid": "patient_paid",
+        "patient_res": "patient_res",
+        "claim_id": "claim_id"
+    },
+    "derived_fields": {}
+}

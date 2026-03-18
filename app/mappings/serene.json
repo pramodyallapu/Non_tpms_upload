@@ -1,0 +1,55 @@
+{
+  "project": "Serene",
+  "version": "1.2",
+  "detection": {
+    "required_headers": [
+      "Client",
+      "Service Date(s)",
+      "Insurer",
+      "Ins Billed",
+      "Ins Due Amount",
+      "Invoice Number"
+    ],
+    "optional_headers": [
+        "Invoice Date",
+        "Clnt Billed"
+    ],
+    "filters": {
+      "deduplicate": true,
+      "column_filter": [
+        {
+          "name": "Condition_to_filter",
+          "column": "Ins Due Amount",
+          "type": "not_equals",
+          "value": "0"
+        }
+      ]
+    }
+  },
+  "column_mappings": {
+    "Client": "client_name",
+    "Insurer": "payor_name",
+    "Ins Billed": "unit_rate",
+    "Ins Due Amount": "balance",
+    "Invoice Number": "claim_id"
+  },
+  "derived_fields": {
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "provider_name": {
+      "type": "static",
+      "value": "na"
+    },
+    "cpt": {
+      "type": "static",
+      "value": "na"
+    },
+    "dos": {
+    "type": "regex_extract",
+    "column": "Service Date(s)",
+    "pattern": "(\\d{2}[\\/\\-]\\d{2}[\\/\\-]\\d{4})"
+    }
+  }
+}

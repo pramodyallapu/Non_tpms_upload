@@ -1,0 +1,54 @@
+{
+    "project": "Kiken",
+    "version": "1.0",
+    "detection": {
+        "required_headers": [
+            "CLAIMS#",
+            "SERVICE DATE",
+            "PATIENT",
+            "PAYER",
+            "CHARGES",
+            "Balance",
+            "Provider Name"
+        ],
+        "optional_headers": [
+            "STATUS",
+            "Guarantor Name"
+        ]
+        },
+    "column_mappings": {
+        "PATIENT": "client_name",
+        "Provider Name": "provider_name",
+        "PAYER": "payor_name",
+        "SERVICE DATE": "dos",
+        "CHARGES": "unit_rate",
+        "Balance": "balance",
+        "CLAIMS#": "claim_id"
+        },
+    "derived_fields": {
+        "cpt":{
+            "type": "static",
+            "value": "na"
+        },
+        "units": {
+            "type": "static",
+            "value": 1
+        },
+        "primary": {
+            "type": "static",
+            "value": ""
+        },
+        "adjustment": {
+            "type": "static",
+            "value": ""
+        },
+        "patient_paid": {
+            "type": "static",
+            "value": ""
+        },
+        "patient_res": {
+            "type": "static",
+            "value": ""
+        }
+    }
+}

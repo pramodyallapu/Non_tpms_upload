@@ -1,0 +1,61 @@
+{
+  "project": "CFT",
+  "version": "1.0",
+  "detection": {
+    "required_headers": [
+      "Date",
+      "Name",
+      "Clinician Name",
+      "Primary Insurer Name",
+      "Rate",
+      "Insurance Amount Due",
+      "Service Code"
+    ],
+    "optional_headers": [
+      "Appointment Type",
+      "Last Name",
+      "First Name",
+      "Secondary Insurer Name",
+      "Primary Diagnosis",
+      "Patient Balance Status"
+    ],
+    "filters": {
+      "deduplicate": true,
+      "column_filter": [
+      {
+        "name": "Condition_to_filter",
+        "column": "Insurance Amount Paid",
+        "type": "equals",
+        "value": "0"
+      }
+    ]
+    }
+  },
+  "column_mappings": {
+        "Date":"dos",
+        "Name":"client_name",
+        "Primary Insurer Name":"payor_name",
+        "Rate":"unit_rate",
+        "Insurance Amount Due":"balance",
+        "Service Code":"cpt",
+        "Claim ID":"claim_id",
+        "Clinician Name":"provider_name"
+  },
+  "derived_fields": {
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "claim_id": {
+    "type": "concat",
+    "columns": [
+      "Client",
+      {
+        "column": "Date of Service",
+        "transform": "excel_serial"
+      }
+    ],
+    "separator": ""
+  }
+  }
+}

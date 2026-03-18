@@ -1,0 +1,68 @@
+{
+  "project": "Key Communicationn",
+  "version": "1.1",
+  "detection": {
+    "required_headers": [
+      "Client",
+      "Date of Service",
+      "Primary Insurance",
+      "Total Fee",
+      "Charge",
+      "Insurance Payment Status"
+    ],
+    "optional_headers": [
+        "Secondary Insurance",
+        "Rate per Unit",
+        "Units",
+        "Total Fee",
+        "Client Payment Status",
+        "Clinician",
+        "Billing Code",
+        "Charge",
+        "Charge.1",
+        "Uninvoiced",
+        "Paid",
+        "Paid.1",
+        "Unpaid",
+        "Insurance Payment Status"
+    ],
+    "filters": {
+      "deduplicate": true,
+      "column_filter": [
+        {
+          "name": "Condition_to_filter",
+          "column": "Insurance Payment Status",
+          "type": "not_in_list",
+          "value": ["PAID","UNBILLED"]
+        },
+        {
+        "name": "exclude zero in unpaid",
+        "column": "Unpaid.1",
+        "type": "not_equals",
+        "value": 0
+      }
+      ]
+    }
+  },
+  "column_mappings": {
+    "Client": "client_name",
+    "Date of Service":"dos",
+    "Primary Insurance": "payor_name",
+    "Total Fee": "unit_rate",
+    "Unpaid.1": "balance"
+  },
+  "derived_fields": {
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "provider_name": {
+      "type": "static",
+      "value": "na"
+    },
+    "cpt": {
+      "type": "static",
+      "value": "na"
+    }
+  }
+}

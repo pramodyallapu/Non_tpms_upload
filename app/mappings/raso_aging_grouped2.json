@@ -1,0 +1,22 @@
+{
+  "project_name":"Raso Report",
+    "version":"1.5",
+    "detection":{
+        "type": "report",
+        "required_markers": ["Carrier:", "Patient ID:", "Claim #:"],
+        "extraction_rules": {
+            "carrier": {"keyword": "Carrier:", "offset": 0, "transform": "split_after_paren"},
+            "patient_name": {"keyword": "Patient ID:", "offset": 2},
+            "claim_number": {"keyword": "Claim #:", "offset": 1}
+        },
+        "service_row_rules": {
+            "date_column_index": 1,
+            "columns": {"unit_rate": 5, "balance": 11}
+        }
+    },
+    "column_mappings":{},
+    "derived_fields":{
+        "units": {"type": "static", "value": 1},
+        "provider_name": {"type": "static", "value": "na"}
+    }
+}

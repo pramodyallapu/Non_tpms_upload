@@ -1,0 +1,91 @@
+{
+  "project": "Alex_1.1",
+  "version": "1.0",
+
+  "detection": {
+    "required_headers": [
+      "Third Party Payer",
+      "Provider",
+      "First Name",
+      "Last Name",
+      "Date",
+      "Billed Amount",
+      "Insurance Balance"
+    ],
+    "optional_headers": [
+      "Patient ID",
+      "Item"
+    ],
+    "filters": {
+    "column_filter": [
+      {
+        "name": "exclude_invalid_insurers",
+        "column": "Third Party Payer",
+        "type": "not_in_list",
+        "values": [
+            "Anderson Injury Lawyers",
+            "Ashmore &  Ashmore Law Firm",
+            "Bergquist Law Firm",
+            "BlueGrass Health Network",
+            "DO NOT USE- RETURNED MAIL -UMR",
+            "Fielding Law Firm",
+            "Frenkel & Frenkel LLP",
+            "Geico",
+            "Gordon McKernan Injury Attorney Law",
+            "HARTFORD",
+            "Harrell & Paulson, LLP",
+            "Hernandez, Medina & Baggett Law Firm",
+            "Law Offices of Houston M. Smith",
+            "McCraw Law Group",
+            "Patricia Morgan Law PLLC",
+            "Progressive",
+            "Smith & Lee, Injury Lawyers",
+            "State Farm Insurance",
+            "State Farm",
+            "Stewart J Guss Attorney",
+            "Stewart J Guss",
+            "The Gooch Law Firm PLLC",
+            "The Law Office of Bryce Carpenter"
+
+        ]
+      },
+      {
+        "name": "positive_balance",
+        "column": "Insurance Balance",
+        "type": "greater_than",
+        "value": 0
+      }
+    ]
+    }
+  },
+  "column_mappings": {
+    "Date": "dos",
+    "Provider": "provider_name",
+    "Third Party Payer": "payor_name",
+    "Billed Amount": "unit_rate",
+    "Insurance Balance": "balance"
+  },
+  "derived_fields": {
+    "client_name": {
+      "type": "concat",
+      "columns": ["First Name", "Last Name"],
+      "separator": " "
+    },
+    "payer_name": {
+      "type": "conditional_replace",
+      "column": "Third Party Payer",
+      "condition": "equals",
+      "value": "No Payer",
+      "replace_with": "Insurance"
+    },
+    "cpt": {
+      "type": "regex_extract",
+      "column": "Item",
+      "pattern": "\\[(.*?)\\]"
+    },
+    "units": {
+      "type": "static",
+      "value": 1
+    }
+  }
+}

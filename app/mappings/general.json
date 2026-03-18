@@ -1,0 +1,52 @@
+{
+    "project": "General",
+    "version": "1.0",
+    "detection": {
+        "required_headers": [
+            "Claim ID",
+            "Provider Name",
+            "Patient Full Name",
+            "DOS"
+        ],
+        "optional_headers": [
+            "Insurance Name",
+            "Billed",
+            "Insurance Balance"
+        ]
+        },
+    "column_mappings": {
+        "Patient Full Name": "client_name",
+        "Provider Name": "provider_name",
+        "Insurance Name": "payor_name",
+        "DOS": "dos",
+        "Billed": "unit_rate",
+        "Insurance Balance": "balance",
+        "Claim ID": "claim_id"
+        },
+    "derived_fields": {
+        "cpt":{
+            "type": "static",
+            "value": "na"
+        },
+        "units": {
+            "type": "static",
+            "value": 1
+        },
+        "primary": {
+            "type": "static",
+            "value": ""
+        },
+        "adjustment": {
+            "type": "static",
+            "value": ""
+        },
+        "patient_paid": {
+            "type": "static",
+            "value": ""
+        },
+        "patient_res": {
+            "type": "static",
+            "value": ""
+        }
+    }
+}

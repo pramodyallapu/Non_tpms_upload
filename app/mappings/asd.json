@@ -1,0 +1,54 @@
+{
+  "project": "ASD",
+  "version": "1.1",
+  "detection": {
+    "required_headers": [
+      "Date of Service",
+      "Patient",
+      "Provider",
+      "Fundingsourcename",
+      "Allowedamount",
+      "Balance",
+      "Claimno"
+    ],
+    "optional_headers": [
+        "Appointment Id",
+        "Externalid",
+        "Patientid",
+        "Supervisorprovider",
+        "Insurancepaid",
+        "Secondaryinsurancepaid",
+        "Contractualamount",
+        "Contractualoutstanding"
+    ],
+    "filters": {
+      "column_filter": [
+        {
+          "name": "exclude_unwanted_claim",
+          "column": "Claim",
+          "type": "not_in_list",
+          "values": ["Closed", "Patient Responsibility", "PR CoIns", "PR Copay", "PR Ded"]
+        }
+      ]
+    }
+  },
+  "column_mappings": {
+    "Date of Service": "dos",
+    "Patient": "client_name",
+    "Provider": "provider_name",
+    "Fundingsourcename": "payor_name",
+    "Allowedamount": "unit_rate",
+    "Balance": "balance",
+    "Claimno": "claim_id"
+  },
+  "derived_fields": {
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "cpt": {
+      "type": "static",
+      "value": "na"
+    }
+  }
+}

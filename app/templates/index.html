@@ -65,6 +65,13 @@
                 </div>
             </div>
 
+            <!-- Static Fields -->
+            <div class="form-group">
+                <label>Static Fields <small>(constant values per practice)</small></label>
+                <div id="static-fields-container"></div>
+                <button type="button" class="btn-add-row" onclick="addStaticFieldRow()">+ Add Static Field</button>
+            </div>
+
             <div class="preview-actions">
                 <button class="btn-secondary" onclick="location.reload()">Reset</button>
                 <button id="process-btn" class="btn-primary">Generate Final Excel</button>
@@ -115,50 +122,50 @@
         });
 
         function initDragDrop(data) {
-            const rawPool = document.getElementById('raw-columns-pool');
-            const grid = document.getElementById('target-fields-grid');
-            document.getElementById('detected-project-badge').textContent = `Format: ${data.detected_project}`;
-            rawPool.innerHTML = '';
-            grid.innerHTML = '';
+        const rawPool = document.getElementById('raw-columns-pool');
+        const grid = document.getElementById('target-fields-grid');
+        document.getElementById('detected-project-badge').textContent = `Format: ${data.detected_project}`;
+        rawPool.innerHTML = '';
+        grid.innerHTML = '';
 
-            // Raw chips
-            data.raw_columns.forEach(col => {
-                const chip = document.createElement('div');
-                chip.className = 'raw-chip';
-                chip.draggable = true;
-                chip.textContent = col;
-                chip.id = 'chip-' + CSS.escape(col);
-                chip.dataset.rawname = col;
-                chip.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', col); chip.classList.add('dragging'); });
-                chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
-                rawPool.appendChild(chip);
-            });
+        // Raw chips
+        data.raw_columns.forEach(col => {
+            const chip = document.createElement('div');
+            chip.className = 'raw-chip';
+            chip.draggable = true;
+            chip.textContent = col;
+            chip.id = 'chip-' + CSS.escape(col);
+            chip.dataset.rawname = col;
+            chip.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', col); chip.classList.add('dragging'); });
+            chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
+            rawPool.appendChild(chip);
+        });
 
-            // Target slots
-            data.standard_columns.forEach(target => {
-                const slot = document.createElement('div');
-                slot.className = 'target-slot';
-                slot.dataset.target = target;
-                slot.innerHTML = `
-                    <div class="slot-label">${target}</div>
-                    <div class="slot-dropzone" id="drop-${target}">
-                        <span class="placeholder">Drop Here</span>
-                    </div>`;
-                const dz = slot.querySelector('.slot-dropzone');
-                dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
-                dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
-                dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); assignColumn(e.dataTransfer.getData('text/plain'), target); });
-                grid.appendChild(slot);
-            });
+        // Target slots
+        data.standard_columns.forEach(target => {
+            const slot = document.createElement('div');
+            slot.className = 'target-slot';
+            slot.dataset.target = target;
+            slot.innerHTML = `
+                <div class="slot-label">${target}</div>
+                <div class="slot-dropzone" id="drop-${target}">
+                    <span class="placeholder">Drop Here</span>
+                </div>`;
+            const dz = slot.querySelector('.slot-dropzone');
+            dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+            dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+            dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); assignColumn(e.dataTransfer.getData('text/plain'), target); });
+            grid.appendChild(slot);
+        });
 
-            // Auto-assign from AI
-            Object.entries(data.column_mappings).forEach(([raw, target]) => {
-                if (data.standard_columns.includes(target)) assignColumn(raw, target);
-            });
-            Object.entries(data.derived_fields).forEach(([target, rule]) => {
-                if (rule.type === 'copy' && data.raw_columns.includes(rule.source)) assignColumn(rule.source, target);
-            });
-        }
+        // Auto-assign from AI
+        Object.entries(data.column_mappings).forEach(([raw, target]) => {
+            if (data.standard_columns.includes(target)) assignColumn(raw, target);
+        });
+        Object.entries(data.derived_fields).forEach(([target, rule]) => {
+            if (rule.type === 'copy' && data.raw_columns.includes(rule.source)) assignColumn(rule.source, target);
+        });
+    }
 
         function assignColumn(rawName, targetName) {
             const dz = document.getElementById('drop-' + targetName);
@@ -194,7 +201,10 @@
 
         document.getElementById('process-btn').addEventListener('click', async () => {
             const filled = [...document.querySelectorAll('.slot-dropzone.filled')];
-            if (!filled.length) { alert('Please map at least one column!'); return; }
+            if (!filled.length && currentData.type !== "report") {
+                alert('Please map at least one column!');
+                return;
+            }
             loading.style.display = 'flex';
 
             const column_mappings = {};
@@ -209,7 +219,9 @@
                         mapping: {
                             type: currentData.type,
                             column_mappings,
-                            derived_fields: currentData.derived_fields
+                            derived_fields: currentData.derived_fields,
+                            detection:currentData.detections,
+                            filters:currentData.filters
                         }
                     })
                 });

@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import Optional
 import pandas as pd
 import os
+import re
 
 from app.core.mapping_detector import detect_mapping
 from app.core.mapping_engine import apply_mapping, STANDARD_COLUMNS
@@ -86,21 +87,46 @@ def read_excel_smart(file_path):
 @router.post("/detect-mapping")
 async def api_detect_mapping(file: UploadFile = File(...)):
     file_path = os.path.join(TEMP_DIR, file.filename)
-
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
     try:
+        # 1. Identify Header Row
         if file.filename.endswith(".csv"):
-            df = pd.read_csv(file_path)
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()
+            header_line = 0
+            for i, line in enumerate(lines):
+                if looks_like_header(line.split(",")):
+                    header_line = i
+                    break
+            df = pd.read_csv(file_path, skiprows=header_line, dtype=str)
         else:
-            df = read_excel_smart(file_path)
+            # Use header=None to scan raw rows first
+            raw = pd.read_excel(file_path, header=None, dtype=str).head(20)
+            header_line = 0
+            for i, row in raw.iterrows():
+                if looks_like_header(row.values):
+                    header_line = i
+                    break
+            
+            # Now load the actual dataframe starting from the detected header
+            df = pd.read_excel(file_path, header=header_line, dtype=str)
 
-        try:
-            mapping = detect_mapping(df.columns)
-        except Exception as e:
-            print(f"FAILED TO DETECT MAPPING. SEEN COLUMNS: {df.columns.tolist()}")
-            raise e
+        # 2. Clean Column Names
+        df.columns = [str(c).strip() for c in df.columns]
+
+        # 3. Drop Summary Rows (But only AFTER identifying headers)
+        # Be careful: don't drop rows that contain "Total" if they are valid data
+        keywords = ["grand total", "report total", "generated on"]
+        mask = df.astype(str).apply(
+            lambda row: any(kw in " ".join(row.dropna()).lower() for kw in keywords),
+            axis=1
+        )
+        df = df[~mask].reset_index(drop=True)
+
+        # 4. Detection
+        mapping = detect_mapping(df.columns, df)
 
         return {
             "filename": file.filename,
@@ -109,9 +135,13 @@ async def api_detect_mapping(file: UploadFile = File(...)):
             "column_mappings": mapping.get("column_mappings", {}),
             "derived_fields": mapping.get("derived_fields", {}),
             "raw_columns": list(df.columns),
-            "standard_columns": STANDARD_COLUMNS,
+            "detections": mapping.get("detection", {}),
+            "standard_columns": STANDARD_COLUMNS
         }
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse(status_code=400, content={"error": str(e)})
 
 
@@ -133,9 +163,54 @@ async def api_process(request: Request):
 
     try:
         if filename.endswith(".csv"):
-            df = pd.read_csv(input_path)
+            # df = pd.read_csv(input_path)
+
+            # Find real header line by skipping summary rows
+            with open(input_path, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()
+
+            header_line = 0
+            for i, line in enumerate(lines):
+                values = line.split(",")
+
+                if looks_like_header(values):
+                    header_line = i
+                    break
+
+            df = pd.read_csv(
+                input_path,
+                skiprows=list(range(header_line)),
+                header=0,
+                dtype=str,
+                engine="python",
+                on_bad_lines="skip"
+            )
+
+        elif filename.endswith((".xls", ".xlsx")):
+            # df = pd.read_excel(input_path)
+
+            # df = read_excel_smart(input_path)
+
+            # Find real header row by skipping summary rows
+            raw = pd.read_excel(input_path, header=None, dtype=str)
+
+            header_line = 0
+            MAX_SCAN_ROWS = 15  # limit scan
+
+            for i, row in raw.head(MAX_SCAN_ROWS).iterrows():
+                if looks_like_header(row.values):
+                    header_line = i
+                    break
+
+            # safety fallback
+            if header_line >= len(raw):
+                print("⚠️ Header detection failed, defaulting to row 0")
+                header_line = 0
+
+            print("✅ Detected header row:", header_line)
+            df = pd.read_excel(input_path, header=header_line, dtype=str)
         else:
-            df = read_excel_smart(input_path)
+            raise HTTPException(status_code=400, detail="Unsupported file format")
 
         final_df = apply_mapping(df, mapping)
         final_df.to_excel(output_path, index=False)
@@ -275,3 +350,44 @@ def toggle_project(project_id: int):
         return {"is_active": m.is_active}
     finally:
         db.close()
+
+def is_mostly_numeric(values):
+    vals = [str(v).strip() for v in values if v and str(v).strip()]
+    if not vals:
+        return False
+
+    count = sum(bool(re.match(r"^[\d\.\-/]+$", v)) for v in vals)
+    return (count / len(vals)) > 0.6
+
+
+def looks_like_header(values):
+    # Filter out empty/NaN values
+    vals = [str(v).strip() for v in values if pd.notna(v) and str(v).strip()]
+    if len(vals) < 3:  # Most headers have multiple columns
+        return False
+
+    row_text = " ".join(vals).lower()
+
+    # 1. ❌ Reject rows that are clearly report titles or date ranges
+    # We removed "total" from here because "Total" is a common column name
+    if any(kw in row_text for kw in ["date range", "all locations", "insurance aging","total client","total insurance","total billed"]):
+        return False
+
+    # 2. ❌ Reject if it's a single long string (likely a title/category)
+    if len(vals) == 1 or (len(vals) < 3 and len(row_text) > 50):
+        return False
+
+    # 3. ✅ Strong check: Does it contain multiple known header keywords?
+    hints = ["patient", "policy", "dos", "enc", "charge", "total", "balance", "name","client"]
+    matched_hints = sum(1 for h in hints if h in row_text)
+    
+    # If we see "Patient" and "Total" in the same row, it's almost certainly the header
+    if matched_hints >= 2:
+        return True
+
+    # 4. ❌ reject rows that are too long (titles usually aren't split into many cells)
+    avg_len = sum(len(v) for v in vals) / len(vals)
+    if avg_len > 30:
+        return False
+
+    return len(vals) >= 4 # Fallback: if it has 4+ non-empty cells, it's likely a header

@@ -1,0 +1,49 @@
+{
+  "project": "Moos, Dr Angie2",
+  "version": "2.0",
+  "detection": {
+    "type": "stateful_1",
+    "skip_keywords": [
+      "insurance aging",
+      "page",
+      "total",
+      "printed",
+      "aged",
+      "outstanding",
+      "bismarck",
+      "moos",
+      "west",
+      "street",
+      "wellness",
+      "chiro",
+      "fax"
+    ],
+
+    "payor": {},
+
+    "client": {
+      "type": "regex",
+      "column": 0,
+      "pattern": "^(.+?)\\s*\\(",
+      "group": 1
+    },
+
+    "data_row": {
+      "type": "date_in_column",
+      "column_index": 0
+    }
+  },
+
+  "column_mappings": {},
+
+  "derived_fields": {
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "provider_name": {
+      "type": "static",
+      "value": "na"
+    }
+  }
+}

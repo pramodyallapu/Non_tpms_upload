@@ -1,6 +1,6 @@
 {
     "project": "Kiken",
-    "version": "1.0",
+    "version": "1.3",
     "detection": {
         "required_headers": [
             "CLAIMS#",
@@ -14,7 +14,17 @@
         "optional_headers": [
             "STATUS",
             "Guarantor Name"
-        ]
+        ],
+        "filters": {
+            "column_filter": [
+            {
+                "name": "Condition_to_filter",
+                "column": "balance",
+                "type": "not_equals",
+                "value": 0
+            }
+            ]
+        }
         },
     "column_mappings": {
         "PATIENT": "client_name",
@@ -26,6 +36,10 @@
         "CLAIMS#": "claim_id"
         },
     "derived_fields": {
+        "provider_name":{
+            "type": "static",
+            "value": "na"
+        },
         "cpt":{
             "type": "static",
             "value": "na"

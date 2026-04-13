@@ -1,0 +1,50 @@
+{
+  "project": "First Step",
+  "version": "1.0",
+
+  "detection": {
+    "required_headers": [
+      "date",
+      "firstname",
+      "lastname",
+      "code",
+      "charge",
+      "balance",
+      "ins_name1"
+    ],
+    "optional_headers": [
+        "id_no",
+        "lastbatch",
+        "ins_dt_wof",
+        "ins_status",
+        "insuredid1"
+    ]
+  },
+
+  "column_mappings": {
+    "date": "dos",
+    "code": "cpt",
+    "charge": "unit_rate",
+    "balance": "balance",
+    "ins_name1": "payor_name"
+  },
+
+  "derived_fields": {
+    "client_name": {
+      "type": "concat",
+      "columns": [
+        "firstname",
+        "lastname"
+      ],
+      "separator": " "
+    },
+    "units":{
+      "type": "static",
+      "value": "1"
+    },
+    "provider_name":{
+      "type": "static",
+      "value": "na"
+    }
+  }
+}

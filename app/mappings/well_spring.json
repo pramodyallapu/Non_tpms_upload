@@ -1,0 +1,74 @@
+{
+  "project": "Well Spring",
+  "version": "1.0",
+  "detection": {
+    "required_headers": [
+      "ClientFirstName",
+      "ClientLastName",
+      "PayorName",
+      "DateOfService",
+      "ProcedureCode",
+      "ClientChargesTotal",
+      "ClientChargesAgreedTotal",
+      "LastClaimId"
+    ],
+    "optional_headers": [
+        "GroupId",
+        "CreationDate"
+    ],
+    "filters": {
+      "deduplicate": true,
+      "column_filter": [
+        {
+          "name": "Exclude Zero Balance",
+          "column": "balance",
+          "type": "not_equals",
+          "value": 0
+        }
+      ]
+    }
+  },
+  "column_mappings": {
+    "PayorName": "payor_name",
+    "DateOfService": "dos",
+    "ProcedureCode": "cpt",
+    "ClientChargesTotal": "unit_rate",
+    "ClientChargesAgreedTotal": "balance",
+    "LastClaimId": "claim_id"
+  },
+  "derived_fields": {
+    "client_name": {
+      "type": "concat",
+      "columns": ["ClientFirstName", "ClientLastName"],
+      "separator": " "
+    },
+    "provider_name": {
+      "type": "static",
+      "value": "na"
+    },
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "cpt": {
+      "type": "static",
+      "value": ""
+    },
+    "primary": {
+      "type": "static",
+      "value": ""
+    },
+    "adjustment": {
+      "type": "static",
+      "value": ""
+    },
+    "patient_paid": {
+      "type": "static",
+      "value": ""
+    },
+    "patient_res": {
+      "type": "static",
+      "value": ""
+    }
+  }
+}

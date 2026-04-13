@@ -1,0 +1,65 @@
+{
+  "project": "Moos, Dr Angie",
+  "version": "1.10",
+  "detection": {
+    "type": "stateful_1",
+    "skip_keywords": [
+      "insurance aging",
+      "page",
+      "total",
+      "printed",
+      "aged",
+      "outstanding",
+      "bismarck",
+      "moos",
+      "west",
+      "street",
+      "wellness",
+      "chiro",
+      "fax"
+    ],
+    "filters": {
+      "deduplicate": true,
+      "column_filter": [
+        {
+          "name": "Exclude Zero Balance",
+          "column": "balance",
+          "type": "not_equals",
+          "value": 0
+        }
+      ]
+    },
+
+    "payor": {},
+
+    "client": {
+      "type": "regex",
+      "column": 0,
+      "pattern": "^(.+?)\\s*\\(",
+      "group": 1
+    },
+
+    "data_row": {
+      "type": "date_in_column",
+      "column_index": 0
+    }
+  },
+
+  "column_mappings": {
+    "4": "dos",
+    "5": "cpt",
+    "9": "unit_rate",
+    "26": "balance"
+  },
+
+  "derived_fields": {
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "provider_name": {
+      "type": "static",
+      "value": "na"
+    }
+  }
+}

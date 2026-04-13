@@ -65,12 +65,19 @@
                 </div>
             </div>
 
-            <!-- Static Fields -->
-            <div class="form-group">
-                <label>Static Fields <small>(constant values per practice)</small></label>
-                <div id="static-fields-container"></div>
-                <button type="button" class="btn-add-row" onclick="addStaticFieldRow()">+ Add Static Field</button>
-            </div>
+            <!-- Filter Options -->
+            <!-- <div class="filter_section">
+                <div class="filter-pool">
+                    <label>Columns (Drag into filters)</label>
+                    <div class="pool-container" id="filter-columns-pool"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Filters <small>(data cleaning rules)</small></label>
+                    <div id="filters-container"></div>
+                    <button type="button" class="btn-add-row" onclick="addFilterRow()">+ Add Filter</button>
+                </div>
+            </div> -->
 
             <div class="preview-actions">
                 <button class="btn-secondary" onclick="location.reload()">Reset</button>
@@ -93,6 +100,7 @@
         const loading = document.getElementById('loading');
         let currentData = null;
 
+        // ─── File Selection ───────────────────────────────────────────────────
         fileInput.addEventListener('change', e => {
             if (e.target.files.length > 0) {
                 fileDisplay.textContent = e.target.files[0].name;
@@ -101,6 +109,7 @@
             }
         });
 
+        // ─── Upload & Detect ──────────────────────────────────────────────────
         uploadForm.addEventListener('submit', async e => {
             e.preventDefault();
             const formData = new FormData();
@@ -121,94 +130,301 @@
             }
         });
 
+        // ─── Init Drag & Drop ─────────────────────────────────────────────────
         function initDragDrop(data) {
-        const rawPool = document.getElementById('raw-columns-pool');
-        const grid = document.getElementById('target-fields-grid');
-        document.getElementById('detected-project-badge').textContent = `Format: ${data.detected_project}`;
-        rawPool.innerHTML = '';
-        grid.innerHTML = '';
+            const rawPool = document.getElementById('raw-columns-pool');
+            const grid = document.getElementById('target-fields-grid');
+            document.getElementById('detected-project-badge').textContent = `Format: ${data.detected_project}`;
+            rawPool.innerHTML = '';
+            grid.innerHTML = '';
 
-        // Raw chips
-        data.raw_columns.forEach(col => {
-            const chip = document.createElement('div');
-            chip.className = 'raw-chip';
-            chip.draggable = true;
-            chip.textContent = col;
-            chip.id = 'chip-' + CSS.escape(col);
-            chip.dataset.rawname = col;
-            chip.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', col); chip.classList.add('dragging'); });
-            chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
-            rawPool.appendChild(chip);
-        });
+            // initFilters(data.filters || {});
+            // initFilterPool(data.raw_columns);
 
-        // Target slots
-        data.standard_columns.forEach(target => {
-            const slot = document.createElement('div');
-            slot.className = 'target-slot';
-            slot.dataset.target = target;
-            slot.innerHTML = `
-                <div class="slot-label">${target}</div>
-                <div class="slot-dropzone" id="drop-${target}">
-                    <span class="placeholder">Drop Here</span>
-                </div>`;
-            const dz = slot.querySelector('.slot-dropzone');
-            dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
-            dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
-            dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); assignColumn(e.dataTransfer.getData('text/plain'), target); });
-            grid.appendChild(slot);
-        });
+            // Raw chips
+            data.raw_columns.forEach(col => {
+                const chip = document.createElement('div');
+                chip.className = 'raw-chip';
+                chip.draggable = true;
+                chip.textContent = col;
+                chip.id = 'chip-' + CSS.escape(col);
+                chip.dataset.rawname = col;
+                chip.addEventListener('dragstart', e => {
+                    e.dataTransfer.setData('text/plain', col);
+                    chip.classList.add('dragging');
+                });
+                chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
+                rawPool.appendChild(chip);
+            });
 
-        // Auto-assign from AI
-        Object.entries(data.column_mappings).forEach(([raw, target]) => {
-            if (data.standard_columns.includes(target)) assignColumn(raw, target);
-        });
-        Object.entries(data.derived_fields).forEach(([target, rule]) => {
-            if (rule.type === 'copy' && data.raw_columns.includes(rule.source)) assignColumn(rule.source, target);
-        });
-    }
+            // Target slots
+            data.standard_columns.forEach(target => {
+                const slot = document.createElement('div');
+                slot.className = 'target-slot';
+                slot.dataset.target = target;
+                slot.innerHTML = `
+                    <div class="slot-label">${target}</div>
+                    <div class="slot-dropzone" id="drop-${target}">
+                        <span class="placeholder">Drop Here</span>
+                    </div>`;
+                const dz = slot.querySelector('.slot-dropzone');
+                dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+                dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+                dz.addEventListener('drop', e => {
+                    e.preventDefault();
+                    dz.classList.remove('drag-over');
+                    assignColumn(e.dataTransfer.getData('text/plain'), target);
+                });
+                grid.appendChild(slot);
+            });
 
+            // Auto-assign from AI
+            Object.entries(data.column_mappings).forEach(([raw, target]) => {
+                if (data.standard_columns.includes(target)) assignColumn(raw, target);
+            });
+            Object.entries(data.derived_fields || {}).forEach(([target, rule]) => {
+                if (rule.type === 'copy' && data.raw_columns.includes(rule.source)) assignColumn(rule.source, target);
+            });
+        }
+
+        // ─── Assign Column to Slot ────────────────────────────────────────────
         function assignColumn(rawName, targetName) {
             const dz = document.getElementById('drop-' + targetName);
             if (!dz) return;
+
             // Release previous chip if any
             if (dz.dataset.assignedRaw) markChipUsed(dz.dataset.assignedRaw, false);
-            dz.innerHTML = `
-                <div class="assigned-chip">
-                    ${rawName}
-                    <span class="remove-btn" onclick="clearSlot('${targetName}')">×</span>
-                </div>`;
+
+            // Build chip via DOM (safe for special chars)
+            const chip = document.createElement('div');
+            chip.className = 'assigned-chip';
+            chip.textContent = rawName;
+
+            const removeBtn = document.createElement('span');
+            removeBtn.className = 'remove-btn';
+            removeBtn.textContent = '×';
+            removeBtn.addEventListener('click', () => clearSlot(targetName));
+            chip.appendChild(removeBtn);
+
+            dz.innerHTML = '';
+            dz.appendChild(chip);
             dz.classList.add('filled');
             dz.dataset.assignedRaw = rawName;
             markChipUsed(rawName, true);
         }
 
+        // ─── Clear Slot ───────────────────────────────────────────────────────
+        window.clearSlot = targetName => {
+            const dz = document.getElementById('drop-' + targetName);
+            if (!dz) return;
+            const raw = dz.dataset.assignedRaw;
+            dz.innerHTML = '<span class="placeholder">Drop Here</span>';
+            dz.classList.remove('filled');
+            delete dz.dataset.assignedRaw;
+            const stillUsed = [...document.querySelectorAll('.slot-dropzone.filled')]
+                .some(z => z.dataset.assignedRaw === raw);
+            if (!stillUsed) markChipUsed(raw, false);
+        };
+
+        // ─── Mark Chip Used ───────────────────────────────────────────────────
         function markChipUsed(rawName, used) {
             document.querySelectorAll('.raw-chip').forEach(c => {
                 if (c.dataset.rawname === rawName) c.classList.toggle('used', used);
             });
         }
 
-        window.clearSlot = targetName => {
-            const dz = document.getElementById('drop-' + targetName);
-            const raw = dz.dataset.assignedRaw;
-            dz.innerHTML = '<span class="placeholder">Drop Here</span>';
-            dz.classList.remove('filled');
-            delete dz.dataset.assignedRaw;
-            // Only unmark chip if assigned nowhere else
-            const stillUsed = [...document.querySelectorAll('.slot-dropzone.filled')].some(z => z.dataset.assignedRaw === raw);
-            if (!stillUsed) markChipUsed(raw, false);
-        };
+        // ─── Filter Pool ──────────────────────────────────────────────────────
+        function initFilterPool(columns) {
+            const container = document.getElementById('filter-columns-pool');
+            container.innerHTML = '';
+            columns.forEach(col => {
+                const chip = document.createElement('div');
+                chip.className = 'raw-chip filter-chip';
+                chip.draggable = true;
+                chip.textContent = col;
+                chip.addEventListener('dragstart', e => {
+                    e.dataTransfer.setData('text/plain', col);
+                });
+                container.appendChild(chip);
+            });
+        }
 
+        // // ─── Init Filters ─────────────────────────────────────────────────────
+        // function initFilters(filters) {
+        //     const container = document.getElementById('filters-container');
+        //     container.innerHTML = '';
+
+        //     // Deduplicate toggle
+        //     const dedup = document.createElement('div');
+        //     dedup.innerHTML = `
+        //         <label>
+        //             <input type="checkbox" id="deduplicate-toggle" ${filters.deduplicate ? 'checked' : ''}>
+        //             Remove Duplicate Rows
+        //         </label>`;
+        //     container.appendChild(dedup);
+
+        //     // Pre-existing filters from saved mapping
+        //     (filters.column_filter || []).forEach(f => addFilterRow(f, false));
+        // }
+
+        // // ─── Add Filter Row ───────────────────────────────────────────────────
+        // function addFilterRow(filter = {}, isNew = true) {
+        //     const container = document.getElementById('filters-container');
+        //     const row = document.createElement('div');
+        //     row.className = 'filter-row';
+
+        //     if (!isNew) {
+        //         // Pre-filled saved filter
+        //         const colInput = document.createElement('input');
+        //         colInput.type = 'text';
+        //         colInput.className = 'filter-column';
+        //         colInput.value = filter.column || '';
+        //         colInput.readOnly = true;
+
+        //         const typeSelect = buildFilterTypeSelect(filter.type || 'equals');
+
+        //         const valueInput = document.createElement('input');
+        //         valueInput.type = 'text';
+        //         valueInput.className = 'filter-value';
+        //         valueInput.value = filter.value || filter.expression || (filter.values ? filter.values.join(',') : '');
+
+        //         const removeBtn = document.createElement('button');
+        //         removeBtn.textContent = '✕';
+        //         removeBtn.addEventListener('click', () => row.remove());
+
+        //         row.append(colInput, typeSelect, valueInput, removeBtn);
+
+        //     } else {
+        //         // New filter — column field looks identical to saved filter but accepts drops
+        //         const colInput = document.createElement('input');
+        //         colInput.type = 'text';
+        //         colInput.className = 'filter-column';
+        //         colInput.placeholder = 'Drop Column Here';
+        //         colInput.readOnly = true;
+        //         colInput.style.cursor = 'copy';
+
+        //         // Drag events on the input itself
+        //         colInput.addEventListener('dragover', e => {
+        //             e.preventDefault();
+        //             colInput.style.borderColor = '#818cf8';
+        //             colInput.style.background = '#1e1b4b';
+        //         });
+        //         colInput.addEventListener('dragleave', () => {
+        //             colInput.style.borderColor = '';
+        //             colInput.style.background = '';
+        //         });
+        //         colInput.addEventListener('drop', e => {
+        //             e.preventDefault();
+        //             colInput.style.borderColor = '';
+        //             colInput.style.background = '';
+        //             const col = e.dataTransfer.getData('text/plain');
+        //             colInput.value = col;
+        //             colInput.style.color = '#e2e8f0';
+        //         });
+
+        //         const typeSelect = buildFilterTypeSelect('equals');
+        //         typeSelect.addEventListener('change', () => handleFilterTypeChange(typeSelect));
+
+        //         const valueInput = document.createElement('input');
+        //         valueInput.type = 'text';
+        //         valueInput.className = 'filter-value';
+        //         valueInput.placeholder = 'Value';
+
+        //         const removeBtn = document.createElement('button');
+        //         removeBtn.textContent = '✕';
+        //         removeBtn.addEventListener('click', () => row.remove());
+
+        //         row.append(colInput, typeSelect, valueInput, removeBtn);
+        //     }
+
+        //     container.appendChild(row);
+        // }
+
+        // // ─── Build Filter Type Select ─────────────────────────────────────────
+        // function buildFilterTypeSelect(selectedValue) {
+        //     const select = document.createElement('select');
+        //     select.className = 'filter-type';
+        //     [
+        //         ['equals',      'Equals'],
+        //         ['not_equals',  'Not Equals'],
+        //         ['greater_than','Greater Than'],
+        //         ['less_than',   'Less Than'],
+        //         ['not_in_list', 'Not In List'],
+        //         ['not_contains','Not Contains'],
+        //         ['formula',     'Formula'],
+        //     ].forEach(([val, label]) => {
+        //         const opt = document.createElement('option');
+        //         opt.value = val;
+        //         opt.textContent = label;
+        //         if (val === selectedValue) opt.selected = true;
+        //         select.appendChild(opt);
+        //     });
+        //     return select;
+        // }
+
+        // // ─── Handle Filter Type Change ────────────────────────────────────────
+        // function handleFilterTypeChange(select) {
+        //     const row = select.closest('.filter-row');
+        //     const valueInput = row.querySelector('.filter-value');
+        //     if (!valueInput) return;
+        //     if (select.value === 'not_in_list' || select.value === 'not_contains') {
+        //         valueInput.placeholder = 'val1, val2, val3';
+        //     } else if (select.value === 'formula') {
+        //         valueInput.placeholder = 'e.g. row["balance"] > 0';
+        //     } else {
+        //         valueInput.placeholder = 'Value';
+        //     }
+        // }
+
+        // // ─── Collect Filters ──────────────────────────────────────────────────
+        // function collectFilters() {
+        //     const filters = {
+        //         deduplicate: document.getElementById('deduplicate-toggle')?.checked || false,
+        //         column_filter: []
+        //     };
+
+        //     document.querySelectorAll('.filter-row').forEach(row => {
+        //         const column = row.querySelector('.filter-column')?.value;  // works for both saved & new
+        //         const type = row.querySelector('.filter-type')?.value;
+        //         const rawValue = row.querySelector('.filter-value')?.value || '';
+
+        //         if (!column || !type) return;
+
+        //         const filterObj = { column, type };
+
+        //         if (type === 'not_in_list' || type === 'not_contains') {
+        //             filterObj.values = rawValue.split(',').map(v => v.trim());
+        //         } else if (type === 'formula') {
+        //             filterObj.expression = rawValue;
+        //         } else {
+        //             filterObj.value = rawValue;
+        //         }
+
+        //         filters.column_filter.push(filterObj);
+        //     });
+
+        //     return filters;
+        // }
+
+        // ─── Process Button ───────────────────────────────────────────────────
         document.getElementById('process-btn').addEventListener('click', async () => {
             const filled = [...document.querySelectorAll('.slot-dropzone.filled')];
-            if (!filled.length && currentData.type !== "report") {
+            if (!filled.length && currentData.type !== 'report') {
                 alert('Please map at least one column!');
                 return;
             }
             loading.style.display = 'flex';
 
             const column_mappings = {};
-            filled.forEach(dz => { column_mappings[dz.dataset.assignedRaw] = dz.parentNode.dataset.target; });
+            filled.forEach(dz => {
+                const raw = dz.dataset.assignedRaw;
+                const target = dz.closest('.target-slot').dataset.target;
+
+                if (!column_mappings[target]) {
+                    column_mappings[target] = [];
+                }
+                column_mappings[target].push(raw);
+            });
 
             try {
                 const res = await fetch('/process', {
@@ -220,14 +436,19 @@
                             type: currentData.type,
                             column_mappings,
                             derived_fields: currentData.derived_fields,
-                            detection:currentData.detections,
-                            filters:currentData.filters
+                            detection: currentData.detections,
+                            // filters: collectFilters()
+                            filters: {}
                         }
                     })
                 });
                 const result = await res.json();
-                if (result.output_url) { window.location.href = result.output_url; setTimeout(() => location.reload(), 1500); }
-                else alert('Processing failed: ' + (result.error || 'Unknown error'));
+                if (result.output_url) {
+                    window.location.href = result.output_url;
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    alert('Processing failed: ' + (result.error || 'Unknown error'));
+                }
             } catch (e) {
                 alert('Process failed: ' + e.message);
             } finally {

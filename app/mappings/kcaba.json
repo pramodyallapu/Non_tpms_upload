@@ -1,0 +1,75 @@
+{
+  "project": "KCABA",
+  "version": "1.1",
+  "detection": {
+    "required_headers": [
+      "Client",
+      "Service Date",
+      "Insurer",
+      "Insurance Billed Amount",
+      "Balance Due",
+      "Code",
+      "Invoice Number"
+    ],
+    "optional_headers": [
+      "Payer ID",
+      "Service Type",
+      "Co-Insurance"
+    ],
+    "filters": {
+      "deduplicate": true,
+      "column_filter": [
+      {
+        "name": "Condition_to_filter",
+        "column": "balance",
+        "type": "not_equals",
+        "value": 0
+      },
+      {
+        "column": "cpt",
+        "type": "not_equals",
+        "value": "-"
+      }
+    ]
+    }
+  },
+  "column_mappings": {
+        "Service Date":"dos",
+        "Client":"client_name",
+        "Insurer":"payor_name",
+        "Insurance Billed Amount":"unit_rate",
+        "Balance Due":"balance",
+        "Code":"cpt",
+        "Invoice Number":"claim_id"
+  },
+  "derived_fields": {
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "provider_name":{
+      "type": "static",
+      "value": "na"
+    },
+    "cpt":{
+    "type": "static",
+    "value": "na"
+    },
+    "primary": {
+        "type": "static",
+        "value": ""
+    },
+    "adjustment": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_paid": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_res": {
+        "type": "static",
+        "value": ""
+    }
+  }
+}

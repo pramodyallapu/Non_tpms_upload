@@ -11,37 +11,66 @@ STANDARD_COLUMNS = [
 ]
 
 def apply_mapping(df, mapping):
+    print("Apply Mapping ")
     # Check if this is a stateful (grouped) mapping
     if mapping.get("type") == "stateful":
         return apply_stateful_mapping(df, mapping)
         
     if mapping.get("type") == "report":
         return apply_report_style_stateful_mapping(df, mapping)
+
+    if mapping.get("type") == "stateful_1":
+        return apply_stateful_mapping_1(df,mapping)
     
     print("Normal Match")
-    # print(mapping)
+    print(mapping)
     print("Filters : ",mapping.get("detection", {}).get("filters", []))
+    print("Rules Based : ",mapping.get("detection",{}).get("rules",[]))
     output = pd.DataFrame()
 
-     # Apply filters
-    print("Before :",len(df))
     filters=mapping.get("detection", {}).get("filters", {})
-    # print(type(filters))
+    rules = filters.get("rules", []) if isinstance(filters, dict) else []
+
+    print("Before Filter : ", len(df))
     df  = apply_filters(df ,filters)
-    print("After :",len(df))
+    print("After Filter : ",len(df))
 
-    # return
-
-    # Remove $ and commas from all string columns
-    df = df.replace(r'[\$,]', '', regex=True)
+    # Create a lowercase → original column mapping
+    df_cols_map = {c.lower(): c for c in df.columns}
 
     # Direct mappings
     for raw_col, target_col in mapping.get("column_mappings", {}).items():
-        if raw_col in df.columns:
-            output[target_col] = df[raw_col]
+        raw_col_lower = raw_col.lower()
 
+        # Case 1: OLD FORMAT
+        if isinstance(target_col, str):
+            target_col_lower = target_col.lower()
+
+            if raw_col_lower in df_cols_map:
+                output[target_col] = df[df_cols_map[raw_col_lower]]
+
+        # Case 2: NEW FORMAT (multi-column fallback)
+        elif isinstance(target_col, list):
+           # Normalize mapping columns
+            target_cols_lower = [col.lower() for col in target_col]
+
+            # Find first matching column in df (case-insensitive)
+            selected_col = None
+            for col in target_cols_lower:
+                if col in df_cols_map:
+                    selected_col = df_cols_map[col]
+                    break  # ✅ pick first match only
+
+            if selected_col:
+                # print("Selected Column :",selected_col)
+                output[raw_col] = df[selected_col]
     # Derived fields
     for field, rule in mapping.get("derived_fields", {}).items():
+
+        # Skip if already populated from column_mappings
+        if field in output.columns:
+            continue
+
         if rule["type"] == "static":
             output[field] = rule["value"]
 
@@ -74,28 +103,40 @@ def apply_mapping(df, mapping):
             parts = []
 
             for c in cols:
+                # Case 1: multiple columns (list) -> join inside group with internal_sep
+                if isinstance(c, list):
+                    internal_sep = rule.get("internal_separator", " ")  # default space inside group
+                    sub_parts = []
+                    for sub_col in c:
+                        if sub_col in df.columns:
+                            sub_parts.append(df[sub_col].fillna("").astype(str))
+                    if sub_parts:
+                        # join inside the group first
+                        parts.append(pd.concat(sub_parts, axis=1).agg(internal_sep.join, axis=1))
 
-                # Case 1: simple column
-                if isinstance(c, str):
+                # Case 2: single column string
+                elif isinstance(c, str):
                     if c in df.columns:
                         parts.append(df[c].fillna("").astype(str))
 
-                # Case 2: column with transform
+                # Case 3: dict with transform
                 elif isinstance(c, dict):
                     col = c.get("column")
-                    transform = c.get("transform")
+                    cols = col if isinstance(col, list) else [col]
 
-                    if col in df.columns:
-                        series = df[col]
+                    available_cols = [cc for cc in cols if cc in df.columns]
 
+                    if available_cols:
+                        series = df[available_cols].bfill(axis=1).iloc[:, 0]
+
+                        transform = c.get("transform")
                         if transform == "excel_serial":
-                            series = (
-                                pd.to_datetime(series, errors="coerce")
-                                - pd.Timestamp("1899-12-30")
-                            ).dt.days
+                            series = (pd.to_datetime(series, errors="coerce") - pd.Timestamp("1899-12-30")).dt.days
+                            series = series.fillna(0).astype(int)
 
                         parts.append(series.fillna("").astype(str))
 
+            # Combine all parts using top-level separator
             if parts:
                 output[field] = pd.concat(parts, axis=1).agg(sep.join, axis=1)
             else:
@@ -136,28 +177,82 @@ def apply_mapping(df, mapping):
                 output[field] = series.str.extract(pattern, expand=False)
             else:
                 output[field] = None
+        
+        elif rule["type"] == "status_engine":
+            conditions = rule.get("conditions", [])
+
+            df["__status__"] = None  # temp column
+
+            # ensure numeric safety
+            for col in ["AmountAgreedOwed", "AmountPaid", "CopayAmount"]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+            ins_col = "FirstSecondaryInsuranceOnFile" if "FirstSecondaryInsuranceOnFile" in df.columns else None
+            if ins_col:
+                df[ins_col] = df[ins_col].fillna("").astype(str)
+
+            # evaluate rules in order (FIRST MATCH WINS)
+            for cond in conditions:
+                name = cond["name"]
+                rules = cond["conditions"]
+
+                mask = pd.Series(True, index=df.index)
+
+                for r in rules:
+                    col = r["column"]
+                    op = r["type"]
+                    val = r["value"]
+
+                    if col not in df.columns:
+                        mask &= False
+                        continue
+
+                    series = df[col]
+
+                    if op == "greater_than":
+                        mask &= series > val
+                    elif op == "less_than":
+                        mask &= series < val
+                    elif op == "equals":
+                        mask &= series == val
+                    elif op == "not_equals":
+                        mask &= series != val
+
+                # assign only if not already assigned
+                df.loc[mask & df["__status__"].isna(), "__status__"] = name
+
+            output[field] = df["__status__"]
 
     numeric_cols = ["unit_rate", "balance"]  # put all numeric columns here
+    
     for col in numeric_cols:
         if col in output.columns:
-            if pd.api.types.is_numeric_dtype(output[col]):
-                output[col] = output[col].fillna(0)
-            else:
-                output[col] = pd.to_numeric(
-                    output[col].astype(str).str.replace(",", ""),
-                    errors='coerce'
-                ).fillna(0)
+            # Step 1: Convert to string
+            s = output[col].astype(str)
+            # Step 2: Remove $ and commas
+            s = s.str.replace(r'[\$,]', '', regex=True)
+            # Step 3: Convert to numeric, coerce errors to NaN
+            output[col] = pd.to_numeric(s, errors='coerce').fillna(0).round(2)
     
     date_cols = ["dos", "billed_date"]  # add any other date columns if needed
     for col in date_cols:
         if col in output.columns:
-            output[col] = pd.to_datetime(output[col], errors="coerce").dt.strftime("%m-%d-%Y")
+            output[col] = pd.to_datetime(output[col], errors="coerce")
+    
+    # output.to_excel("afterStatus.xlsx", index=False, engine="openpyxl")
+    
+    print("Before Filter 1 : ", len(output))
+    final_output  = apply_filters(output ,filters)
+    print("After Filter 1 : ",len(final_output))
+    # final_output=output
+
 
     for col in STANDARD_COLUMNS:
-        if col not in output:
-            output[col] = None
+        if col not in final_output:
+            final_output[col] = None
 
-    return output[STANDARD_COLUMNS]
+    return final_output[STANDARD_COLUMNS]
 
 def apply_stateful_mapping(df, mapping):
     print("Stateful")
@@ -240,18 +335,20 @@ def apply_stateful_mapping(df, mapping):
             if balance_raw == '-' or charge_raw == '-': continue
             try:
                 clean_bal = balance_raw.replace(',', '').replace('$', '')
-                if clean_bal and float(clean_bal) <= 0:
+                bal_value = float(clean_bal)
+                # Remove zero only
+                if bal_value == 0:
                     continue
             except Exception:
-                pass
+                # Remove non-numeric values like "abc"
+                continue
 
             for field, rule in mapping.get("derived_fields", {}).items():
+                if field in entry:
+                    continue
                 if rule["type"] == "static": entry[field] = rule["value"]
             
             results.append(entry)
-            # if len(results)==20:
-            #     print("Result : ",results)
-            #     break
             continue
 
         # Skip pure-digit rows (aging summary like "41 EMPIRE PLAN-UHC NY")
@@ -300,7 +397,7 @@ def apply_stateful_mapping(df, mapping):
         if col in output_df.columns:
             output_df[col] = pd.to_datetime(
                 output_df[col], errors="coerce"
-            ).dt.strftime("%m-%d-%Y")
+            )
 
     for col in STANDARD_COLUMNS:
         if col not in output_df.columns:
@@ -429,7 +526,7 @@ def apply_report_style_stateful_mapping(df, mapping_json):
     date_cols = ["dos", "billed_date"]  # add any other date columns if needed
     for col in date_cols:
         if col in output_df.columns:
-            output_df[col] = pd.to_datetime(output_df[col], errors="coerce").dt.strftime("%m-%d-%Y")
+            output_df[col] = pd.to_datetime(output_df[col], errors="coerce")
 
     return output_df[STANDARD_COLUMNS].fillna("")
 
@@ -441,9 +538,12 @@ def apply_filters(df, filters):
       - greater_than
       - less_than
       - equals
+      - not_equals
       - formula
       - deduplicate (remove identical rows)
     """
+    # print("Filters : ",len(filters))
+    # print(df.head(10))
     if not filters:
         return df
 
@@ -458,8 +558,26 @@ def apply_filters(df, filters):
 
         ftype = f.get("type")
         if ftype == "not_in_list":
-            values = f.get("values", [])
-            df = df[~df[col].isin(values)]
+            values = f.get("value", [])
+            match_type = f.get("match_type", "exact")  # default old behavior
+            if values:
+                if match_type == "contains":
+                    pattern = "|".join([re.escape(str(v)) for v in values])
+                    mask = df[col].astype(str).str.contains(pattern, case=False, na=False)
+                    df = df[~mask]
+                else:  # exact match (old behavior)
+                    df = df[~df[col].isin(values)]
+        elif ftype == "in_list":
+            values = f.get("value", [])
+            match_type = f.get("match_type", "exact")  # default behavior
+
+            if values:
+                if match_type == "contains":
+                    pattern = "|".join([re.escape(str(v)) for v in values])
+                    mask = df[col].astype(str).str.contains(pattern, case=False, na=False)
+                    df = df[mask]   # KEEP matching rows
+                else:  # exact match (default)
+                    df = df[df[col].isin(values)]
         elif ftype == "greater_than":
             val = f.get("value", 0)
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
@@ -468,36 +586,22 @@ def apply_filters(df, filters):
             val = f.get("value", 0)
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
             df = df[df[col] < val]
-        elif ftype == "equals":
-            val = f.get("value", "")
-
-            series = df[col]
-
-            if val == "" or val is None:
-                # Treat empty string: keep only non-empty rows
-                mask = series.notna() & (series.astype(str).str.strip() != "")
-            else:
-                # Attempt numeric comparison first
-                try:
-                    val_num = float(val)
-                    series_num = pd.to_numeric(series, errors="coerce")
-                    mask = series_num == val_num
-                except ValueError:
-                    # fallback to string comparison if val is not numeric
-                    mask = series.astype(str).str.strip() == str(val).strip()
-
-            df = df[mask]
-        elif ftype == "not_equals":
+        # Inside apply_filters
+        elif ftype in ["equals", "not_equals"]:
             val = f.get("value")
-            series = df[col]
-
-            if val == "" or val is None:
-                # Exclude empty cells (NaN + blank + whitespace)
-                mask = series.notna() & (series.astype(str).str.strip() != "")
-            else:
-                mask = series.astype(str).str.strip() != str(val).strip()
-
-            df = df[mask]
+            try:
+                val_num = float(val)
+                if ftype == "equals":
+                    df = df[df[col] == val_num]
+                else:
+                    df = df[df[col] != val_num]
+            except (ValueError, TypeError):
+                # fallback for non-numeric columns
+                if ftype == "equals":
+                    df = df[df[col].astype(str).str.strip() == str(val).strip()]
+                else:
+                    df = df[df[col].astype(str).str.strip() != str(val).strip()]
+                    
         elif ftype == "formula":
             expr = f.get("expression")
             if expr:
@@ -510,12 +614,288 @@ def apply_filters(df, filters):
                     df = df[mask]
                 except Exception:
                     pass
-        
-        elif ftype == "not_contains":
-            values = f.get("values", [])
-            if values:
-                pattern = "|".join([re.escape(str(v)) for v in values])
-                mask = df[col].astype(str).str.contains(pattern, case=False, na=False)
-                df = df[~mask]
+                
+        elif ftype == "regex":
+            pattern = f.get("pattern")
+            if pattern:
+                df = df[df[col].astype(str).str.contains(pattern, regex=True, na=False)]
 
     return df
+
+def clean_numeric(x):
+    if pd.isna(x):
+        return x
+
+    x = str(x).replace(",", "").strip()
+
+    # convert (12.34) → -12.34
+    if re.match(r"^\(.*\)$", x):
+        x = "-" + x[1:-1]
+
+    try:
+        return float(x)
+    except:
+        return 0
+
+def apply_status_engine(df, config):
+    rules = config.get("rules", [])
+    status_col = config.get("status_column", "status")
+
+    df = df.copy()
+
+    # 1. Normalize numeric columns ONCE
+    num_cols = ["AmountAgreedOwed", "AmountPaid", "CopayAmount"]
+    for col in num_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    # 2. Initialize status column
+    df[status_col] = None
+
+    # 3. Sort by priority (VERY IMPORTANT)
+    rules = sorted(rules, key=lambda x: x.get("priority", 999))
+
+    # 4. Evaluate rules
+    for rule in rules:
+        mask = pd.Series(True, index=df.index)
+
+        for cond in rule.get("conditions", []):
+            col = cond["column"]
+            op = cond["op"]
+            val = cond["value"]
+
+            if col not in df.columns:
+                mask &= False
+                continue
+
+            if op == "gt":
+                mask &= df[col] > val
+            elif op == "lt":
+                mask &= df[col] < val
+            elif op == "eq":
+                mask &= df[col] == val
+            elif op == "ne":
+                mask &= df[col] != val
+
+        # FIRST MATCH WINS
+        mask_to_fill = mask & df[status_col].isna()
+        df.loc[mask_to_fill, status_col] = rule["name"]
+
+    return df
+
+def apply_stateful_mapping_1(df, mapping):
+    print("Stateful (Universal + )")
+    print("Mapping : ", mapping)
+ 
+    results = []
+ 
+    detection      = mapping.get("detection", {})
+    skip_keywords  = detection.get("skip_keywords", [])
+    filters  = detection.get("filters", [])
+    payor_cfg      = detection.get("payor", {})
+    client_cfg     = detection.get("client", {})
+    data_cfg       = detection.get("data_row", {})
+    column_mappings = mapping.get("column_mappings", {})
+ 
+    current_payor  = "na"
+    current_client = "na"
+    claim_id_logic = None
+ 
+    # ------------------------------------------------------------------
+    # Clean dataframe
+    # ------------------------------------------------------------------
+    df = df.replace(r'^\s*$', pd.NA, regex=True)
+    df = df.dropna(axis=1, how='all')
+    df = df.dropna(axis=0, how='all')
+    df = df.reset_index(drop=True)
+    print("Cleaned DF Shape : ", df.shape)
+ 
+    date_pattern = r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}-\d{2}-\d{2}'
+
+    for _, row in df.iterrows():
+        row_list  = row.tolist()
+        clean_row = [str(x).strip() if pd.notna(x) else "" for x in row_list]
+        # print("Data : ",clean_row)
+        row_text  = " ".join(clean_row).lower()
+ 
+        clean_row_filtered = [x for x in clean_row if x]
+        row_text_clean     = " ".join(clean_row_filtered)
+ 
+        is_detection_row = False
+ 
+        # ==============================================================
+        # 1. PAYOR DETECTION
+        # ==============================================================
+        if payor_cfg is not None:          # payor_cfg={} still enters
+            detected_payor = None
+ 
+            # 1a. Regex pattern match (only if "pattern" key present)
+            pattern = payor_cfg.get("pattern")
+            if pattern:
+                match = re.search(pattern, row_text_clean)
+                if match:
+                    detected_payor = match.group(1).strip()
+ 
+            # 1b. Column-based phone detection
+            #     Row has ≥2 cells AND any cell starts with "phone"/"ph"
+            #     → read clean_row[0] as the payor name
+            if not detected_payor and len(clean_row) > 1:
+                if any(
+                    re.match(r'^(phone|ph)\b', str(c).lower().strip())
+                    for c in clean_row
+                ):
+                    candidate = clean_row[0].strip()
+                    if (
+                        candidate
+                        and re.search(r'[A-Za-z]', candidate)
+                        and not any(
+                            k.lower() in candidate.lower()
+                            for k in skip_keywords
+                        )
+                    ):
+                        detected_payor = candidate
+ 
+            # 1c. Single-token fallback (e.g. "All State" alone on a row)
+            if not detected_payor and len(clean_row_filtered) == 1:
+                val = clean_row_filtered[0].strip()
+                if (
+                    re.fullmatch(r'[A-Za-z\s]+', val)
+                    and not any(
+                        k.lower() in val.lower() for k in skip_keywords
+                    )
+                ):
+                    detected_payor = val
+ 
+            if detected_payor:
+                current_payor    = detected_payor
+                is_detection_row = True
+ 
+        # ==============================================================
+        # 2. CLIENT DETECTION
+        # ==============================================================
+        if client_cfg:
+            col_idx = client_cfg.get("column", 0)
+            pattern = client_cfg.get("pattern")
+ 
+            if len(clean_row) > col_idx:
+                val = clean_row[col_idx]
+ 
+                if pattern:
+                    match = re.search(pattern, val)
+                    if match:
+                        current_client   = match.group(
+                            client_cfg.get("group", 1)
+                        ).strip()
+                        is_detection_row = True
+                else:
+                    if val.strip():
+                        current_client   = val.strip()
+                        is_detection_row = True
+ 
+        # ==============================================================
+        # 3. SKIP ROW LOGIC
+        # ==============================================================
+        skip_row = any(k.lower() in row_text for k in skip_keywords)
+ 
+        if skip_row and not is_detection_row:
+            continue
+ 
+        if is_detection_row:
+            continue
+ 
+        # ==============================================================
+        # 4. DATA ROW DETECTION
+        # ==============================================================
+        is_data = False
+        if data_cfg.get("type") == "date_in_column":
+            idx = data_cfg.get("column_index")
+            if idx is not None and len(clean_row) > idx:
+                if re.match(date_pattern, clean_row[idx]):
+                    is_data = True
+            else:
+                # fallback if column is unreliable
+                if any(re.match(date_pattern, v) for v in clean_row):
+                    is_data = True
+            # print("Data : ",is_data)
+ 
+        if not is_data:
+            continue
+ 
+        # ==============================================================
+        # 5. BUILD ENTRY
+        # ==============================================================
+        entry = {col: "" for col in STANDARD_COLUMNS}
+        entry["client_name"] = current_client
+        entry["payor_name"]  = current_payor
+ 
+        for target, idx_list in column_mappings.items():
+            # print("target:", target, "| idx_list:", idx_list)
+            try:
+                idx = int(idx_list[0])   # 👈 extract from list
+                if idx < len(clean_row):
+                    entry[target] = clean_row[idx]
+            except Exception:
+                pass
+ 
+        # ==============================================================
+        # 6. DERIVED FIELDS
+        # ==============================================================
+        for field, rule in mapping.get("derived_fields", {}).items():
+            if field in entry and entry[field] != "":
+                continue
+            if rule["type"] == "static":
+                entry[field] = rule["value"]
+ 
+        if entry.get("claim_id", "") != "":
+            claim_id_logic = True
+ 
+        results.append(entry)
+ 
+    # ------------------------------------------------------------------
+    # FINAL OUTPUT
+    # ------------------------------------------------------------------
+    if not results:
+        return pd.DataFrame(columns=STANDARD_COLUMNS)
+ 
+    output_df = pd.DataFrame(results)
+ 
+    # Normalize numeric fields
+    for col in ["unit_rate", "balance"]:
+        if col in output_df.columns:
+            output_df[col] = output_df[col].apply(clean_numeric)
+ 
+    # Normalize dates
+    for col in ["dos", "billed_date"]:
+        if col in output_df.columns:
+            output_df[col] = pd.to_datetime(output_df[col], errors="coerce")
+ 
+    # Auto-generate claim_id if none found in data
+    if not claim_id_logic:
+        parts = []
+        if "client_name" in output_df.columns:
+            parts.append(
+                output_df["client_name"].fillna("").astype(str)
+            )
+        if "dos" in output_df.columns:
+            dos_series  = pd.to_datetime(output_df["dos"], errors="coerce")
+            dos_serial  = (dos_series - pd.Timestamp("1899-12-30")).dt.days
+            dos_int     = dos_serial.fillna(0).astype("Int64")
+            parts.append(dos_int.astype(str))
+ 
+        if parts:
+            output_df["claim_id"] = (
+                pd.concat(parts, axis=1).agg("".join, axis=1)
+            )
+        else:
+            output_df["claim_id"] = None
+    
+    print("Before Filter : ",len(output_df))
+    final_df=apply_filters(output_df,filters)
+    print("After : ",len(final_df))
+ 
+    for col in STANDARD_COLUMNS:
+        if col not in final_df.columns:
+            final_df[col] = ""
+ 
+    print("Stateful (Universal - )")
+    return final_df[STANDARD_COLUMNS].fillna("")

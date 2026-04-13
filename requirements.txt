@@ -6,3 +6,4 @@ jinja2
 python-multipart
 sqlalchemy
 xlrd>=2.0.1
+XlsxWriter

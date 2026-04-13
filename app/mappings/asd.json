@@ -1,9 +1,8 @@
 {
   "project": "ASD",
-  "version": "1.1",
+  "version": "1.8",
   "detection": {
     "required_headers": [
-      "Date of Service",
       "Patient",
       "Provider",
       "Fundingsourcename",
@@ -24,16 +23,23 @@
     "filters": {
       "column_filter": [
         {
-          "name": "exclude_unwanted_claim",
-          "column": "Claim",
-          "type": "not_in_list",
-          "values": ["Closed", "Patient Responsibility", "PR CoIns", "PR Copay", "PR Ded"]
+        "name": "Condition_to_filter",
+        "column": "balance",
+        "type": "not_equals",
+        "value": 0
+        },
+        {
+        "name": "Remove Invalid Status",
+        "column": "Claim",
+        "type": "not_in_list",
+        "value": ["Closed","PR","Patient Responsibility"],
+        "match_type": "contains"
         }
       ]
     }
   },
   "column_mappings": {
-    "Date of Service": "dos",
+    "DOS": "dos", 
     "Patient": "client_name",
     "Provider": "provider_name",
     "Fundingsourcename": "payor_name",
@@ -49,6 +55,26 @@
     "cpt": {
       "type": "static",
       "value": "na"
+    },
+    "provider_name":{
+        "type": "static",
+        "value": "na"
+    },
+    "primary": {
+        "type": "static",
+        "value": ""
+    },
+    "adjustment": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_paid": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_res": {
+        "type": "static",
+        "value": ""
     }
   }
 }

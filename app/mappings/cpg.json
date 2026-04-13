@@ -1,6 +1,6 @@
 {
   "project": "Collaborative Psychology Group",
-  "version": "1.1",
+  "version": "1.6",
   "detection": {
     "required_headers": [
       "Claim ID",
@@ -26,15 +26,15 @@
       "column_filter": [
       {
         "name": "Exclude_Values",
-        "column": "Payer Balance",
+        "column": "balance",
         "type": "not_equals",
-        "value": ""
+        "value": 0
       }
     ]
     }
   },
   "column_mappings": {
-      "Claim ID":"claim_id",
+      "Encounter ID":"claim_id",
       "Date Of Service":"dos",
       "Patient Name":"client_name",
       "Charges":"unit_rate",
@@ -48,9 +48,9 @@
       "value": 1
     },
     "cpt": {
-    "type": "regex_extract",
-    "column": "Procedure Code",
-    "pattern": "^\\s*(\\d{5})"
-    }
+  "type": "regex_extract",
+  "column": "Procedure Code",
+  "pattern": "^\\s*((?=[A-Za-z0-9]{0,4}\\d)[A-Za-z0-9]{5})"
+}
   }
 }

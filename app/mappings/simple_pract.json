@@ -1,0 +1,84 @@
+{
+  "project": "Simple Practice",
+  "version": "1.3",
+
+  "detection": {
+    "required_headers": [
+      "Date of Service",
+      "Client",
+      "Primary Insurance"
+    ],
+    "optional_headers": [
+      "Clinician",
+      "Billing Code",
+      "Units",
+      "Rate per Unit"
+    ],
+    "filters": {
+      "column_filter": [
+      {
+        "name": "Exclude_Empty_Insurance",
+        "column": "Primary Insurance",
+        "type": "not_equals",
+        "value": ""
+      },
+      {
+        "name": "exclude zero in unpaid",
+        "column": "balance",
+        "type": "not_equals",
+        "value": 0
+      }
+    ]
+    }
+  },
+
+  "column_mappings": {
+    "Date of Service": "dos",
+    "Client": "client_name",
+    "Primary Insurance": "payor_name",
+    "Total Fee": "unit_rate",
+    "Unpaid.1":"balance"
+  },
+
+  "derived_fields": {
+    "provider_name": {
+      "type": "static",
+      "value": "na"
+    },
+    "claim_id": {
+    "type": "concat",
+    "columns": [
+      "Client",
+      {
+        "column": "Date of Service",
+        "transform": "excel_serial"
+      }
+    ],
+    "separator": ""
+    },
+    "cpt":{
+        "type": "static",
+        "value": "na"
+    },
+    "units": {
+        "type": "static",
+        "value": 1
+    },
+    "primary": {
+        "type": "static",
+        "value": ""
+    },
+    "adjustment": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_paid": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_res": {
+        "type": "static",
+        "value": ""
+    }
+  }
+}

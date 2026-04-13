@@ -1,6 +1,6 @@
 {
   "project": "Optimal",
-  "version": "1.0",
+  "version": "1.1",
   "detection": {
     "required_headers": [
       "Patient Name",
@@ -37,6 +37,17 @@
     "cpt": {
       "type": "static",
       "value": "na"
-    }
+    },
+    "claim_id": {
+    "type": "concat",
+    "columns": [
+      "Patient Name",
+      {
+        "column": "DOS",
+        "transform": "excel_serial"
+      }
+    ],
+    "separator": ""
+  }
   }
 }

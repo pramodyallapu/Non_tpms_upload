@@ -6,8 +6,10 @@ import re
 def normalize(col):
     return col.lower().replace(" ", "").replace("_", "")
 
-def detect_mapping(excel_columns, df=None):
-    print("Columns : ",excel_columns)
+def detect_mapping(excel_columns,filename, df=None):
+    # print("First Line : ",df.iloc[0])
+    print("Detect_mapping")
+    # print("Columns : ",excel_columns)
 
     excel_cols = set(normalize(c) for c in excel_columns if c)
 
@@ -28,15 +30,13 @@ def detect_mapping(excel_columns, df=None):
     try:
         # Fetch all active mappings from SQLite
         mappings = db.query(ProjectMapping).filter(ProjectMapping.is_active == True).all()
-        # print("Query done")
 
         for m in mappings:
-            # print(m.detection_config)
 
             full_config = m.detection_config or {}
-            print("Detection : ",full_config)
+            # print("Detection : ",full_config)
 
-            # ✅ Handle both nested {"detection": {...}} and flat config formats
+            # Handle both nested {"detection": {...}} and flat config formats
             detection = full_config.get("detection", full_config)
 
             required_headers  = detection.get("required_headers", [])
@@ -45,9 +45,6 @@ def detect_mapping(excel_columns, df=None):
             identifiers       = detection.get("row_identifiers", {})
             mapping_type      = detection.get("type", "standard")
             filter     = detection.get("filters", {})
-
-            # print("HIII")
-            # print("Type : ",detection.get("type",""))
 
             marker_list = list(identifiers.values())
 
@@ -58,10 +55,19 @@ def detect_mapping(excel_columns, df=None):
 
             score = 0
 
-            # --------------------------------
+            if filename.lower() in m.project_name:
+                best_match = {
+                    "project": m.project_name,
+                    "version": m.version,
+                    "type": detection.get("type"),
+                    "column_mappings": m.column_mappings,
+                    "derived_fields": m.derived_fields,
+                    "detection": detection,
+                    "filter":filter
+                }
+
             # Case 1: Report Style Detection
-            # --------------------------------
-            if required_markers and df is not None and mapping_type == "report":
+            elif required_markers and df is not None and mapping_type == "report":
 
                 matched_markers = sum(
                     1 for marker in required_markers
@@ -73,9 +79,8 @@ def detect_mapping(excel_columns, df=None):
 
                 score = matched_markers
             
-            # --------------------------------
             # Case 2: Stateful Excel Detection
-            # --------------------------------
+
             elif required_headers and mapping_type == "stateful":
                 req_norm = [normalize(c) for c in required_headers]
                 opt_norm = [normalize(c) for c in optional_headers]
@@ -96,9 +101,8 @@ def detect_mapping(excel_columns, df=None):
                 # Boost score for stateful — header match + identifier markers
                 score = matched_required + matched_optional + matched_id_markers
             
-            # -------------------------------
             # Case 3: Tabular Excel Detection
-            # -------------------------------
+            
             elif required_headers:
 
                 req_norm = [normalize(c) for c in required_headers]
@@ -112,6 +116,17 @@ def detect_mapping(excel_columns, df=None):
                 matched_optional = sum(1 for c in opt_norm if c in excel_cols)
 
                 score = matched_required + matched_optional
+            
+            elif filename in m.project_name:
+                best_match = {
+                    "project": m.project_name,
+                    "version": m.version,
+                    "type": detection.get("type"),
+                    "column_mappings": m.column_mappings,
+                    "derived_fields": m.derived_fields,
+                    "detection": detection,
+                    "filter":filter
+                }
 
             else:
                 continue
@@ -152,11 +167,13 @@ def detect_mapping(excel_columns, df=None):
 
         if best_match:
             print(f"Matched Project: {best_match['project']} (Score: {best_score})")
+            # print("Columns Found Correct : ",excel_cols)
 
     finally: 
         db.close()
 
     if not best_match:
+        print("Columns Found : ",excel_cols)
         raise Exception("No matching Excel format found in database")
     
     # print("Best Match : ",best_match)

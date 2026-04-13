@@ -5,7 +5,7 @@ from fastapi.requests import Request
 from pydantic import BaseModel
 from typing import Optional
 import pandas as pd
-import os
+import os, csv
 import re
 
 from app.core.mapping_detector import detect_mapping
@@ -90,28 +90,64 @@ async def api_detect_mapping(file: UploadFile = File(...)):
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
+    known_insurances = [
+    "aetna", "medicare", "medicaid", "cigna",
+    "blue cross", "united", "humana"
+]
+    insurance_rows = []
+
     try:
         # 1. Identify Header Row
         if file.filename.endswith(".csv"):
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()
-            header_line = 0
+            start_line = 0
+            header_line = None
             for i, line in enumerate(lines):
-                if looks_like_header(line.split(",")):
+                row_vals = next(csv.reader([line]))
+                if looks_like_header(row_vals):
                     header_line = i
                     break
-            df = pd.read_csv(file_path, skiprows=header_line, dtype=str)
+                if looks_like_insurance_row(row_vals, known_insurances):
+                    insurance_rows.append(i)
+                    break
+            # Decide where to start
+            if header_line is not None and header_line <= 15:
+                start_line = header_line
+            elif insurance_rows:
+                start_line = insurance_rows[0]
+            elif header_line is not None:
+                start_line = header_line
+            else:
+                start_line = 0  
+            df = pd.read_csv(file_path, skiprows=start_line, dtype=str)
         else:
             # Use header=None to scan raw rows first
             raw = pd.read_excel(file_path, header=None, dtype=str).head(20)
+            start_line = 0
             header_line = 0
             for i, row in raw.iterrows():
                 if looks_like_header(row.values):
                     header_line = i
                     break
-            
+                if looks_like_insurance_row(row.values, known_insurances):
+                    insurance_rows.append(i)
+                    break
+
+            # Decide start point
+            if header_line is not None and header_line <= 15:
+                start_line = header_line
+            elif insurance_rows:
+                start_line = insurance_rows[0]
+            elif header_line is not None:
+                start_line = header_line
+            else:
+                start_line = 0      
+
+            # print("insurance_rows : ",insurance_rows)   
+            print("Start Line : ",start_line)  
             # Now load the actual dataframe starting from the detected header
-            df = pd.read_excel(file_path, header=header_line, dtype=str)
+            df = pd.read_excel(file_path, skiprows=start_line, dtype=str)
 
         # 2. Clean Column Names
         df.columns = [str(c).strip() for c in df.columns]
@@ -125,8 +161,19 @@ async def api_detect_mapping(file: UploadFile = File(...)):
         )
         df = df[~mask].reset_index(drop=True)
 
-        # 4. Detection
-        mapping = detect_mapping(df.columns, df)
+        # 4. File name cleanup
+        filename = file.filename.strip()
+        base = os.path.splitext(filename)[0]
+        name_only = re.sub(r"\s+\d+$", "", base)
+
+        print("File Name : ", name_only)
+
+        # Add date-only columns
+        df = convert_dos_to_date_inplace(df)
+
+        # 5. Detection
+        mapping = detect_mapping(df.columns, name_only, df)
+        print("Mapping : ",mapping)
 
         return {
             "filename": file.filename,
@@ -136,6 +183,7 @@ async def api_detect_mapping(file: UploadFile = File(...)):
             "derived_fields": mapping.get("derived_fields", {}),
             "raw_columns": list(df.columns),
             "detections": mapping.get("detection", {}),
+            "filters": mapping.get("filter", {}),
             "standard_columns": STANDARD_COLUMNS
         }
 
@@ -160,6 +208,12 @@ async def api_process(request: Request):
 
     if not os.path.exists(input_path):
         raise HTTPException(status_code=404, detail="Uploaded file not found. Please re-upload.")
+    
+    known_insurances = [
+    "aetna", "medicare", "medicaid", "cigna",
+    "blue cross", "united", "humana"
+]
+    insurance_rows = []
 
     try:
         if filename.endswith(".csv"):
@@ -169,51 +223,69 @@ async def api_process(request: Request):
             with open(input_path, "r", encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()
 
-            header_line = 0
-            for i, line in enumerate(lines):
-                values = line.split(",")
+                start_line = 0
+                header_line = None
+                for i, line in enumerate(lines):
+                    row_vals = next(csv.reader([line]))
+                    if looks_like_header(row_vals):
+                        header_line = i
+                        break
+                    if looks_like_insurance_row(row_vals, known_insurances):
+                        insurance_rows.append(i)
+                        break
+                # Decide where to start
+                if header_line is not None and header_line <= 15:
+                    start_line = header_line
+                elif insurance_rows:
+                    start_line = insurance_rows[0]
+                elif header_line is not None:
+                    start_line = header_line
+                else:
+                    start_line = 0 
 
-                if looks_like_header(values):
-                    header_line = i
-                    break
-
-            df = pd.read_csv(
-                input_path,
-                skiprows=list(range(header_line)),
-                header=0,
-                dtype=str,
-                engine="python",
-                on_bad_lines="skip"
-            )
+            df = pd.read_csv(input_path, skiprows=start_line, dtype=str)
 
         elif filename.endswith((".xls", ".xlsx")):
-            # df = pd.read_excel(input_path)
-
-            # df = read_excel_smart(input_path)
-
-            # Find real header row by skipping summary rows
-            raw = pd.read_excel(input_path, header=None, dtype=str)
-
-            header_line = 0
-            MAX_SCAN_ROWS = 15  # limit scan
-
-            for i, row in raw.head(MAX_SCAN_ROWS).iterrows():
+            # Use header=None to scan raw rows first
+            raw = pd.read_excel(input_path, header=None, dtype=str).head(20)
+            start_line = 0
+            header_line = None
+            for i, row in raw.iterrows():
                 if looks_like_header(row.values):
                     header_line = i
                     break
+                if looks_like_insurance_row(row.values, known_insurances):
+                    insurance_rows.append(i)
+                    break
 
-            # safety fallback
-            if header_line >= len(raw):
-                print("⚠️ Header detection failed, defaulting to row 0")
-                header_line = 0
+            # Decide start point
+            if header_line is not None and header_line <= 15:
+                start_line = header_line
+            elif insurance_rows:
+                start_line = insurance_rows[0]-1
+            elif header_line is not None:
+                start_line = header_line
+            else:
+                start_line = 0      
 
-            print("✅ Detected header row:", header_line)
-            df = pd.read_excel(input_path, header=header_line, dtype=str)
+            print("insurance_rows : ",insurance_rows)  
+            print("Start_line : ",start_line)   
+            # Now load the actual dataframe starting from the detected header
+            df = pd.read_excel(input_path, skiprows=start_line, dtype=str)
         else:
             raise HTTPException(status_code=400, detail="Unsupported file format")
 
         final_df = apply_mapping(df, mapping)
-        final_df.to_excel(output_path, index=False)
+
+        # IMPORTANT: remove time component
+        if "dos" in final_df.columns:
+            final_df["dos"] = pd.to_datetime(final_df["dos"], errors="coerce").dt.normalize()
+        with pd.ExcelWriter(
+            output_path,
+            engine="xlsxwriter",
+            datetime_format="mm/dd/yyyy"
+        ) as writer:
+            final_df.to_excel(writer, index=False, sheet_name="Sheet1")
 
         return {"output_url": f"/download/{output_filename}"}
     except Exception as e:
@@ -351,14 +423,6 @@ def toggle_project(project_id: int):
     finally:
         db.close()
 
-def is_mostly_numeric(values):
-    vals = [str(v).strip() for v in values if v and str(v).strip()]
-    if not vals:
-        return False
-
-    count = sum(bool(re.match(r"^[\d\.\-/]+$", v)) for v in vals)
-    return (count / len(vals)) > 0.6
-
 
 def looks_like_header(values):
     # Filter out empty/NaN values
@@ -370,24 +434,71 @@ def looks_like_header(values):
 
     # 1. ❌ Reject rows that are clearly report titles or date ranges
     # We removed "total" from here because "Total" is a common column name
-    if any(kw in row_text for kw in ["date range", "all locations", "insurance aging","total client","total insurance","total billed"]):
+    bad_phrases = [
+        "date range", "all locations", "insurance aging",
+        "total client report", "total insurance summary", "total billed report","aging"
+        ]
+    if any(row_text.strip() == kw for kw in bad_phrases):
+        return False
+    
+    # 2. Reject metadata rows (key:value pattern)
+    colon_count = sum(1 for v in vals if ":" in v)
+    if colon_count >= 3:
         return False
 
-    # 2. ❌ Reject if it's a single long string (likely a title/category)
+    # 3. Reject if it's a single long string (likely a title/category)
     if len(vals) == 1 or (len(vals) < 3 and len(row_text) > 50):
         return False
 
-    # 3. ✅ Strong check: Does it contain multiple known header keywords?
-    hints = ["patient", "policy", "dos", "enc", "charge", "total", "balance", "name","client"]
+    # 4. Strong check: Does it contain multiple known header keywords?
+    hints = ["patient", "policy", "dos", "enc", "charge", "balance", "name","client","id","procedure","diagnosis","location"]
     matched_hints = sum(1 for h in hints if h in row_text)
     
     # If we see "Patient" and "Total" in the same row, it's almost certainly the header
     if matched_hints >= 2:
         return True
 
-    # 4. ❌ reject rows that are too long (titles usually aren't split into many cells)
-    avg_len = sum(len(v) for v in vals) / len(vals)
-    if avg_len > 30:
+    # 5. reject rows that are too long (titles usually aren't split into many cells)
+    if len(vals) > 30 and matched_hints >= 3:
+        return True
+    
+
+    return len(vals) >= 5 # Fallback: if it has 4+ non-empty cells, it's likely a header
+
+def looks_like_insurance_row(values, known_insurances):
+    vals = [str(v).strip() for v in values if pd.notna(v) and str(v).strip()]
+    if not vals:
         return False
 
-    return len(vals) >= 4 # Fallback: if it has 4+ non-empty cells, it's likely a header
+    row_text = " ".join(vals).lower()
+
+    # Strong signal: known insurance names
+    if any(name in row_text for name in known_insurances):
+        return True
+
+    return False
+
+def convert_dos_to_date_inplace(df, target_columns=None):
+    """
+    Convert specific date columns to date-only format, replacing original column.
+    Parameters:
+    - df: pandas DataFrame
+    - target_columns: list of column names (case-insensitive) to check
+                      Default: ['dos', 'date of service']
+    Returns:
+    - df: DataFrame with original columns replaced by date-only values
+    """
+    if target_columns is None:
+        target_columns = ['dos', 'date of service']
+    
+    # Normalize target columns for comparison
+    target_lower = [c.lower() for c in target_columns]
+    
+    for col in df.columns:
+        if col.lower() in target_lower:
+            # Parse as datetime and overwrite column with date only
+            temp = pd.to_datetime(df[col], errors='coerce')
+            if temp.notna().any():
+                df[col] = temp.dt.date
+                
+    return df

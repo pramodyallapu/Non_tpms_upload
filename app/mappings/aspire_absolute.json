@@ -1,0 +1,79 @@
+{
+  "project": "Aspire & Absolute",
+  "version": "1.1",
+  "detection": {
+    "required_headers": [
+      "Client Name",
+      "Clinician",
+      "Primary Insurance",
+      "DOS",
+      "Service Code",
+      "Billed Amount",
+      "Outstanding Balance",
+      "Claim No."
+    ],
+    "optional_headers": [
+        "Rendering Provider",
+        "Authorization Number",
+        "Primary Insurance Id",
+        "Primary Insurance Payments"
+    ],
+    "filters": {
+      "column_filter": [
+        {
+        "name": "Remove Invalid Insurance",
+        "column": "Claim Payment Status",
+        "type": "not_in_list",
+        "value": ["Closed", "Patient Responsibility","PR Ded", "PR Copay", "PR Colns"],
+        "match_type": "contains"
+      },
+        {
+          "name": "Exclude Zero Balance",
+          "column": "balance",
+          "type": "not_equals",
+          "value": 0
+        }
+      ]
+    }
+  },
+  "column_mappings": {
+    "Client Name": "client_name",
+    "Clinician": "provider_name",
+    "Primary Insurance": "payor_name",
+    "DOS": "dos",
+    "Service Code": "cpt",
+    "Billed Amount": "unit_rate",
+    "Outstanding Balance": "balance",
+    "Claim No.": "claim_id"
+  },
+  "derived_fields": {
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "cpt": {
+      "type": "static",
+      "value": "na"
+    },
+    "provider_name":{
+        "type": "static",
+        "value": "na"
+    },
+    "primary": {
+        "type": "static",
+        "value": ""
+    },
+    "adjustment": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_paid": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_res": {
+        "type": "static",
+        "value": ""
+    }
+  }
+}

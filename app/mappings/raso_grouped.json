@@ -1,0 +1,59 @@
+{
+    "project": "Insurance Aged Receivables Claim Detail",
+    "version": "1.0",
+    "detection": {
+        "type": "stateful",
+        "required_headers": [
+            "Patient ID",
+            "Patient Name",
+            "DOB",
+            "Claim #",
+            "Filed",
+            "Svc Date",
+            "Amount",
+            "Ins Due"
+        ],
+        "optional_headers": [
+            "Other Paid",
+            "Other Adj",
+            "Paid",
+            "Adjs",
+            "Pat Due",
+            "Modifiers",
+            "Dx Ref",
+            "Status"
+        ]
+    },
+    "column_mappings": {
+        "0": "svc_date",
+        "3": "cpt_code",
+        "6": "amount",
+        "12": "insurance_due"
+    },
+    "derived_fields": {
+        "provider_name": {
+            "type": "static",
+            "value": "na"
+        },
+        "units": {
+            "type": "static",
+            "value": 1
+        },
+        "primary": {
+            "type": "static",
+            "value": ""
+        },
+        "adjustment": {
+            "type": "static",
+            "value": ""
+        },
+        "patient_paid": {
+            "type": "static",
+            "value": ""
+        },
+        "patient_res": {
+            "type": "static",
+            "value": ""
+        }
+    }
+}

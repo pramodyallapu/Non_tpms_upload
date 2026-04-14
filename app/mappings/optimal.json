@@ -1,0 +1,53 @@
+{
+  "project": "Optimal",
+  "version": "1.1",
+  "detection": {
+    "required_headers": [
+      "Patient Name",
+      "Company",
+      "DOS",
+      "Balance",
+      "Charges"
+    ],
+    "optional_headers": [
+      "Facility",
+      "Company Phone",
+      "Patient Phone"
+    ],
+    "filters": {
+      "deduplicate": true
+    }
+  },
+  "column_mappings": {
+    "Patient Name": "client_name",
+    "Company": "payor_name",
+    "DOS": "dos",
+    "Balance": "balance",
+    "Charges": "unit_rate"
+  },
+  "derived_fields": {
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "provider_name": {
+      "type": "static",
+      "value": "na"
+    },
+    "cpt": {
+      "type": "static",
+      "value": "na"
+    },
+    "claim_id": {
+    "type": "concat",
+    "columns": [
+      "Patient Name",
+      {
+        "column": "DOS",
+        "transform": "excel_serial"
+      }
+    ],
+    "separator": ""
+  }
+  }
+}

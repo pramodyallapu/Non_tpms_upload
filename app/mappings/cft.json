@@ -1,0 +1,105 @@
+{
+  "project": "CFT",
+  "version": "1.7",
+  "detection": {
+    "required_headers": [
+      "Date",
+      "Clinician Name",
+      "First Name",
+      "Last Name",
+      "Primary Insurer Name",
+      "Rate",
+      "Insurance Amount Due",
+      "Service Code"
+    ],
+    "optional_headers": [
+      "Appointment Type",
+      "Last Name",
+      "First Name",
+      "Secondary Insurer Name",
+      "Primary Diagnosis",
+      "Patient Balance Status"
+    ],
+    "filters": {
+      "deduplicate": true,
+      "column_filter": [
+      {
+        "name": "Condition_to_filter",
+        "column": "balance",
+        "type": "not_equals",
+        "value": 0
+      },
+      {
+        "name": "Remove Invalid Insurance",
+        "column": "payor_name",
+        "type": "not_in_list",
+        "value": ["Cash"],
+        "match_type": "contains"
+      },
+      {
+        "column": "payor_name",
+        "type": "not_equals",
+        "value": ""
+      },
+      {
+        "name": "Filter Based on Status",
+        "column": "Insurance Balance Status",
+        "type": "not_equals",
+        "value": "Paid"
+      }
+    ]
+    }
+  },
+  "column_mappings": {
+        "Date":"dos",
+        "Primary Insurer Name":"payor_name",
+        "Rate":"unit_rate",
+        "Insurance Amount Due":"balance",
+        "Service Code":"cpt",
+        "Clinician Name":"provider_name"
+  },
+  "derived_fields": {
+    "client_name": {
+      "type": "concat",
+      "columns": ["First Name", "Last Name"],
+      "separator": " "
+    },
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "claim_id": {
+        "type": "concat",
+        "columns": [
+            ["First Name", "Last Name"],         
+            {"column": "Date", "transform": "excel_serial"} 
+        ],
+        "separator": "",                
+        "internal_separator": " "
+    },
+    "provider_name":{
+      "type": "static",
+      "value": "na"
+    },
+    "cpt":{
+    "type": "static",
+    "value": "na"
+    },
+    "primary": {
+        "type": "static",
+        "value": ""
+    },
+    "adjustment": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_paid": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_res": {
+        "type": "static",
+        "value": ""
+    }
+  }
+}

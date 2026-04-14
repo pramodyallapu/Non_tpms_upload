@@ -1,0 +1,40 @@
+{
+  "project": "TLG",
+  "version": "1.0",
+  "detection": {
+    "required_headers": [
+      "Insurer",
+      "Client Name",
+      "Service Date",
+      "Inv #"
+    ],
+    "optional_headers": [
+      "Bill Date",
+      "Current Balance",
+      "DOB",
+      "Service Description"
+    ]
+  },
+  "column_mappings": {
+    "Client Name": "client_name",
+    "Insurer": "payor_name",
+    "Service Date": "dos",
+    "Current Balance": "balance",
+    "Total Amount": "unit_rate",
+    "Inv #":"claim_id"
+  },
+  "derived_fields": {
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "provider_name": {
+      "type": "static",
+      "value": "na"
+    },
+    "cpt": {
+      "type": "static",
+      "value": "na"
+    }
+  }
+}

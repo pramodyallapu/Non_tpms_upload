@@ -1,0 +1,51 @@
+{
+  "project": "Aloha Kids_1",
+  "version": "1.3",
+  "detection": {
+    "required_headers": [
+      "Claim_Id",
+      "Date of Service",
+      "Client Name",
+      "Billed Amount",
+      "Payer Balance",
+      "Rendering Provider",
+      "Primary Payer "
+    ],
+    "optional_headers": [
+      "Billed Units",
+      "Office",
+      "Client City",
+      "Adjustments",
+      "Primary Billed Date",
+      "Secondary Payer",
+      "Tertiary  Payer"
+    ],
+    "filters": {
+      "deduplicate": true,
+      "column_filter": [
+      {
+        "name": "Exclude_Values",
+        "column": "balance",
+        "type": "not_equals",
+        "value": 0
+      }
+    ]
+    }
+  },
+  "column_mappings": {
+      "Claim_Id":"claim_id",
+      "Date of Service":"dos",
+      "Client Name":"client_name",
+      "Billed Amount":"unit_rate",
+      "Payer Balance":"balance",
+      "Rendering Provider":"provider_name",
+      "Primary Payer":"payor_name",
+      "Billing Code":"cpt"
+  },
+  "derived_fields": {
+    "units": {
+      "type": "static",
+      "value": 1
+    }
+  }
+}

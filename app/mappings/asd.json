@@ -1,0 +1,80 @@
+{
+  "project": "ASD",
+  "version": "1.8",
+  "detection": {
+    "required_headers": [
+      "Patient",
+      "Provider",
+      "Fundingsourcename",
+      "Allowedamount",
+      "Balance",
+      "Claimno"
+    ],
+    "optional_headers": [
+        "Appointment Id",
+        "Externalid",
+        "Patientid",
+        "Supervisorprovider",
+        "Insurancepaid",
+        "Secondaryinsurancepaid",
+        "Contractualamount",
+        "Contractualoutstanding"
+    ],
+    "filters": {
+      "column_filter": [
+        {
+        "name": "Condition_to_filter",
+        "column": "balance",
+        "type": "not_equals",
+        "value": 0
+        },
+        {
+        "name": "Remove Invalid Status",
+        "column": "Claim",
+        "type": "not_in_list",
+        "value": ["Closed","PR","Patient Responsibility"],
+        "match_type": "contains"
+        }
+      ]
+    }
+  },
+  "column_mappings": {
+    "DOS": "dos", 
+    "Patient": "client_name",
+    "Provider": "provider_name",
+    "Fundingsourcename": "payor_name",
+    "Allowedamount": "unit_rate",
+    "Balance": "balance",
+    "Claimno": "claim_id"
+  },
+  "derived_fields": {
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "cpt": {
+      "type": "static",
+      "value": "na"
+    },
+    "provider_name":{
+        "type": "static",
+        "value": "na"
+    },
+    "primary": {
+        "type": "static",
+        "value": ""
+    },
+    "adjustment": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_paid": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_res": {
+        "type": "static",
+        "value": ""
+    }
+  }
+}

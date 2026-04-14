@@ -1,0 +1,143 @@
+{
+  "project": "GBC, Interact & ESST",
+  "version": "1.12",
+  "detection": {
+    "required_headers": [
+      "ClientFirstName",
+      "ClientLastName",
+      "PayorName",
+      "DateOfService",
+      "ProcedureCode",
+      "ClientChargesTotal",
+      "ClientChargesAgreedTotal",
+      "LastClaimId"
+    ],
+    "optional_headers": [
+        "Id",
+        "GroupId",
+        "CreationDate",
+        "TimeWorkedFrom",
+        "ClientId"
+    ],
+    "filters": {
+      "deduplicate": true,
+      "column_filter": [
+        {
+        "name": "Status Filter",
+        "column": "status",
+        "type": "in_list",
+        "value": ["Open", "Underpayment","Secondary Respo", "Overpayment"]
+      },
+      {
+        "name": "CPT Pattern",
+        "column": "cpt",
+        "type": "regex",
+        "pattern": "^\\s*((?=[A-Za-z0-9]{0,4}\\d)[A-Za-z0-9]{5})"
+      }
+    ]
+    }
+  },
+  "column_mappings": {
+    "PayorName": "payor_name",
+    "DateOfService": "dos",
+    "ClientChargesTotal": "unit_rate",
+    "AmountAgreedOwed": "balance",
+    "LastClaimId": "claim_id"
+  },
+  "derived_fields": {
+    "client_name": {
+      "type": "concat",
+      "columns": ["ClientFirstName", "ClientLastName"],
+      "separator": " "
+    },
+    "provider_name": {
+      "type": "concat",
+      "columns": ["ProviderFirstName", "ProviderLastName"],
+      "separator": " "
+    },
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "cpt": {
+    "type": "regex_extract",
+    "column": "ProcedureCode",
+    "pattern": "^\\s*((?=[A-Za-z0-9]{0,4}\\d)[A-Za-z0-9]{5})"
+    },
+    "primary": {
+      "type": "static",
+      "value": ""
+    },
+    "adjustment": {
+      "type": "static",
+      "value": ""
+    },
+    "patient_paid": {
+      "type": "static",
+      "value": ""
+    },
+    "patient_res": {
+      "type": "static",
+      "value": ""
+    },
+    "status": {
+      "type": "status_engine",
+      "conditions": [
+        {
+          "name": "Open",
+          "conditions": [
+            { "column": "AmountAgreedOwed", "type": "greater_than", "value": 0 },
+            { "column": "AmountPaid", "type": "equals", "value": 0 }
+          ]
+        },
+        {
+          "name": "Adjustment",
+          "conditions": [
+            { "column": "AmountAgreedOwed", "type": "less_than", "value": 0 },
+            { "column": "AmountPaid", "type": "equals", "value": 0 }
+          ]
+        },
+        {
+          "name": "Closed",
+          "conditions": [
+            { "column": "AmountAgreedOwed", "type": "equals", "value": 0 },
+            { "column": "AmountPaid", "type": "not_equals", "value": 0 }
+          ]
+        },
+        {
+          "name": "Underpayment",
+          "conditions": [
+            { "column": "AmountAgreedOwed", "type": "greater_than", "value": 0 },
+            { "column": "AmountPaid", "type": "not_equals", "value": 0 },
+            { "column": "CopayAmount", "type": "equals", "value": 0 }
+          ]
+        },
+        {
+          "name": "Patient Respo",
+          "conditions": [
+            { "column": "AmountAgreedOwed", "type": "greater_than", "value": 0 },
+            { "column": "AmountPaid", "type": "not_equals", "value": 0 },
+            { "column": "CopayAmount", "type": "not_equals", "value": 0 },
+            { "column": "FirstSecondaryInsuranceOnFile", "type": "equals", "value": "" }
+          ]
+        },
+        {
+          "name": "Secondary Respo",
+          "conditions": [
+            { "column": "AmountAgreedOwed", "type": "greater_than", "value": 0 },
+            { "column": "AmountPaid", "type": "not_equals", "value": 0 },
+            { "column": "CopayAmount", "type": "not_equals", "value": 0 },
+            { "column": "FirstSecondaryInsuranceOnFile", "type": "not_equals", "value": "" }
+          ]
+        },
+        {
+          "name": "Overpayment",
+          "conditions": [
+            { "column": "AmountAgreedOwed", "type": "less_than", "value": 0 },
+            { "column": "AmountPaid", "type": "not_equals", "value": 0 }
+          ]
+        }
+      ]
+    }
+  }
+}

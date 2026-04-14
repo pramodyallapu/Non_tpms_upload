@@ -1,0 +1,61 @@
+{
+  "project": "Farnaz Rahmani",
+  "version": "1.2",
+
+  "detection": {
+    "required_headers": [
+      "Date of Service",
+      "Client",
+      "Billing Code"
+    ],
+    "optional_headers": [
+      "Clinician",
+      "Primary Insurance",
+      "Units",
+      "Rate per Unit",
+      "DOS"
+    ],
+    "minimum_match_percent": 60,
+    "filters": {
+      "column_filter": [
+      {
+        "name": "Exclude_Empty_Insurance",
+        "column": "payor_name",
+        "type": "not_equals",
+        "value": ""
+      }
+    ]
+    }
+  },
+
+  "column_mappings": {
+    "Date of Service": "dos",
+    "Client": "client_name",
+    "Billing Code": "cpt",
+    "Primary Insurance": "payor_name",
+    "Units": "units",
+    "Rate per Unit": "unit_rate"
+  },
+
+  "derived_fields": {
+    "balance": {
+      "type": "formula",
+      "expression": "Total Fee - Paid"
+    },
+    "provider_name": {
+      "type": "static",
+      "value": "Farnaz Rahmani"
+    },
+    "claim_id": {
+    "type": "concat",
+    "columns": [
+      "Client",
+      {
+        "column": "Date of Service",
+        "transform": "excel_serial"
+      }
+    ],
+    "separator": ""
+  }
+  }
+}

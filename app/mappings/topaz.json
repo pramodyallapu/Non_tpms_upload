@@ -1,0 +1,71 @@
+{
+  "project": "Topaz",
+  "version": "1.0",
+  "detection": {
+    "required_headers": [
+      "Patient Name",
+      "DOS From",
+      "Primary INS.",
+      "Charge",
+      "Balance",
+      "CPT",
+      "Claim#"
+    ],
+    "optional_headers": [
+      "Service Location",
+      "RP",
+      "Member #",
+      "PCRef#"
+    ],
+    "filters": {
+      "deduplicate": true,
+      "column_filter": [
+      {
+        "name": "Condition_to_filter",
+        "column": "balance",
+        "type": "not_equals",
+        "value": 0
+      }
+    ]
+    }
+  },
+  "column_mappings": {
+        "DOS From":"dos",
+        "Patient Name":"client_name",
+        "Primary INS.":"payor_name",
+        "Charge":"unit_rate",
+        "Balance":"balance",
+        "CPT":"cpt",
+        "Claim#":"claim_id"
+  },
+  "derived_fields": {
+    "units": {
+      "type": "static",
+      "value": 1
+    },
+    "provider_name":{
+      "type": "static",
+      "value": "na"
+    },
+    "cpt":{
+    "type": "static",
+    "value": "na"
+    },
+    "primary": {
+        "type": "static",
+        "value": ""
+    },
+    "adjustment": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_paid": {
+        "type": "static",
+        "value": ""
+    },
+    "patient_res": {
+        "type": "static",
+        "value": ""
+    }
+  }
+}

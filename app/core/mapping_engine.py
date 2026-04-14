@@ -726,7 +726,7 @@ def apply_stateful_mapping_1(df, mapping):
         # ==============================================================
         # 1. PAYOR DETECTION
         # ==============================================================
-        if payor_cfg is not None:          # payor_cfg={} still enters
+        if payor_cfg is not None:
             detected_payor = None
  
             # 1a. Regex pattern match (only if "pattern" key present)
@@ -758,13 +758,21 @@ def apply_stateful_mapping_1(df, mapping):
             # 1c. Single-token fallback (e.g. "All State" alone on a row)
             if not detected_payor and len(clean_row_filtered) == 1:
                 val = clean_row_filtered[0].strip()
-                if (
+
+                if clean_row[0]!="":
+                    # check if value starts with any skip keyword
+                    is_skipped = any(val.startswith(k.lower()) for k in skip_keywords)
+
+                    if not is_skipped and val:
+                        detected_payor = val
+                else:
+                    if (
                     re.fullmatch(r'[A-Za-z\s]+', val)
                     and not any(
                         k.lower() in val.lower() for k in skip_keywords
-                    )
-                ):
-                    detected_payor = val
+                        )
+                    ):
+                        detected_payor = val
  
             if detected_payor:
                 current_payor    = detected_payor

@@ -268,7 +268,7 @@ async def api_process(request: Request):
             else:
                 start_line = 0      
 
-            print("insurance_rows : ",insurance_rows)  
+            # print("insurance_rows : ",insurance_rows)  
             print("Start_line : ",start_line)   
             # Now load the actual dataframe starting from the detected header
             df = pd.read_excel(input_path, skiprows=start_line, dtype=str)
@@ -463,7 +463,7 @@ def looks_like_header(values):
         return True
     
 
-    return len(vals) >= 5 # Fallback: if it has 4+ non-empty cells, it's likely a header
+    return len(vals) >= 7 # Fallback: if it has 4+ non-empty cells, it's likely a header
 
 def looks_like_insurance_row(values, known_insurances):
     vals = [str(v).strip() for v in values if pd.notna(v) and str(v).strip()]

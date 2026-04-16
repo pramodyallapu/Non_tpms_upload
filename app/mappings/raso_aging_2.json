@@ -12,6 +12,17 @@
         "service_row_rules": {
             "date_column_index": 1,
             "columns": {"unit_rate": 28, "balance": 68}
+        },
+        "filters": {
+            "deduplicate": true,
+            "column_filter": [
+                {
+                "name": "Exclude Zero Balance",
+                "column": "balance",
+                "type": "not_equals",
+                "value": 0
+                }
+            ]
         }
     },
     "column_mappings":{},

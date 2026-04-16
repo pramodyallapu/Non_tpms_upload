@@ -1,6 +1,6 @@
 {
   "project": "murphy & braddock",
-  "version": "1.4",
+  "version": "1.5",
 
   "detection": {
     "required_headers": [
@@ -18,7 +18,17 @@
         "ins_dt_wof",
         "ins_status",
         "insuredid1"
+    ],
+    "filters": {
+    "column_filter": [
+      {
+        "name": "Exclude Zero balance",
+        "column": "balance",
+        "type": "not_equals",
+        "value": 0
+      }
     ]
+    }
   },
 
   "column_mappings": {

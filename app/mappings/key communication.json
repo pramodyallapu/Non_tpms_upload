@@ -1,6 +1,6 @@
 {
   "project": "Key Communicationn",
-  "version": "1.1",
+  "version": "1.2",
   "detection": {
     "required_headers": [
       "Client",
@@ -40,6 +40,12 @@
         "column": "Unpaid.1",
         "type": "not_equals",
         "value": 0
+      },
+      {
+        "name": "exclude zero from balance",
+        "column": "balance",
+        "type": "not_equals",
+        "value": 0
       }
       ]
     }
@@ -63,6 +69,17 @@
     "cpt": {
       "type": "static",
       "value": "na"
-    }
+    },
+    "claim_id": {
+    "type": "concat",
+    "columns": [
+      "Client",
+      {
+        "column": "Date of Service",
+        "transform": "excel_serial"
+      }
+    ],
+    "separator": ""
+  }
   }
 }

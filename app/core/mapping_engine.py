@@ -260,19 +260,21 @@ def apply_stateful_mapping(df, mapping):
     Handles reports where one record spans multiple rows or depends on previous rows (grouping).
     Specifically tailored for Insurance Aging Detail reports.
     """
+    print("mapping : ",mapping)
     results = []
     
     current_payor = "na"
     current_client = "na"
+
+    detection = mapping.get("detection",{})
+    filters  = detection.get("filters", [])
     
     # Grab the known header strings from the mapping to skip duplicates
-    headers_to_skip = set(str(h).lower().strip() for h in mapping.get("detection_config", {}).get("required_headers", []))
+    headers_to_skip = set(str(h).lower().strip() for h in mapping.get("detection", {}).get("required_headers", []))
     # Strict date pattern: must START with digits in a date-like format
     DATE_PATTERN = re.compile(
         r'^(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})'
     )
-
-    i=0
 
     for _, row in df.iterrows():
         row_list = row.tolist()
@@ -296,7 +298,7 @@ def apply_stateful_mapping(df, mapping):
         if isinstance(raw_val_0, (pd.Timestamp, datetime.datetime)):
             is_data = True
             dos_val = f"{raw_val_0.month}/{raw_val_0.day}/{raw_val_0.year}"
-        elif DATE_PATTERN.match(val_0.strip()):
+        elif DATE_PATTERN.search(val_0.strip()):
             is_data = True
             try:
                 temp_dt = pd.to_datetime(val_0)
@@ -344,9 +346,9 @@ def apply_stateful_mapping(df, mapping):
                 continue
 
             for field, rule in mapping.get("derived_fields", {}).items():
-                if field in entry:
-                    continue
-                if rule["type"] == "static": entry[field] = rule["value"]
+                if not entry.get(field):
+                    if rule["type"] == "static":
+                        entry[field] = rule["value"]
             
             results.append(entry)
             continue
@@ -385,6 +387,7 @@ def apply_stateful_mapping(df, mapping):
     if not results:
         return pd.DataFrame(columns=STANDARD_COLUMNS)
         
+    print("Final Result Length : ",len(results))
     output_df = pd.DataFrame(results)
 
     for col in ["unit_rate", "balance"]:
@@ -402,6 +405,10 @@ def apply_stateful_mapping(df, mapping):
     for col in STANDARD_COLUMNS:
         if col not in output_df.columns:
             output_df[col] = ""
+    
+    print("Before Filter 1 : ", len(output_df))
+    final_output  = apply_filters(output_df ,filters)
+    print("After Filter 1 : ",len(final_output))
 
     return output_df[STANDARD_COLUMNS].fillna("")
 
@@ -419,6 +426,7 @@ def apply_report_style_stateful_mapping(df, mapping_json):
     service_row_rules = detection.get("service_row_rules", {})
     date_col_idx = service_row_rules.get("date_column_index", 1)
     service_columns = service_row_rules.get("columns", {})
+    filters  = detection.get("filters", [])
 
     def get_cell(row_list, idx):
         if idx < len(row_list):
@@ -521,14 +529,18 @@ def apply_report_style_stateful_mapping(df, mapping_json):
     numeric_cols = ["unit_rate", "balance"]  # put all numeric columns here
     for col in numeric_cols:
         if col in output_df.columns:
-            output_df[col] = pd.to_numeric(output_df[col].str.replace(",", ""), errors='coerce').fillna(0)
+            output_df[col] = output_df[col].apply(clean_numeric)
 
     date_cols = ["dos", "billed_date"]  # add any other date columns if needed
     for col in date_cols:
         if col in output_df.columns:
             output_df[col] = pd.to_datetime(output_df[col], errors="coerce")
+    
+    print("Before Filter 1 : ", len(output_df))
+    final_output  = apply_filters(output_df ,filters)
+    print("After Filter 1 : ",len(final_output))
 
-    return output_df[STANDARD_COLUMNS].fillna("")
+    return final_output[STANDARD_COLUMNS].fillna("")
 
 def apply_filters(df, filters):
     """
@@ -627,6 +639,9 @@ def clean_numeric(x):
         return x
 
     x = str(x).replace(",", "").strip()
+
+    # Remove common currency symbols
+    x = re.sub(r"[₹$€£]", "", x)
 
     # convert (12.34) → -12.34
     if re.match(r"^\(.*\)$", x):
@@ -836,10 +851,9 @@ def apply_stateful_mapping_1(df, mapping):
         entry["client_name"] = current_client
         entry["payor_name"]  = current_payor
  
-        for target, idx_list in column_mappings.items():
-            # print("target:", target, "| idx_list:", idx_list)
+        for idx, target in column_mappings.items():
             try:
-                idx = int(idx_list[0])   # 👈 extract from list
+                idx = int(idx)   # 👈 extract from list
                 if idx < len(clean_row):
                     entry[target] = clean_row[idx]
             except Exception:

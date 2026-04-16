@@ -1,6 +1,6 @@
 {
   "project": "Alex_1.1",
-  "version": "1.3",
+  "version": "1.4",
 
   "detection": {
     "required_headers": [
@@ -18,37 +18,6 @@
     ],
     "filters": {
     "column_filter": [
-      {
-        "name": "exclude_invalid_insurers",
-        "column": "payor_name",
-        "type": "not_in_list",
-        "value": [
-            "Anderson Injury Lawyers",
-            "Ashmore &  Ashmore Law Firm",
-            "Bergquist Law Firm",
-            "BlueGrass Health Network",
-            "DO NOT USE- RETURNED MAIL -UMR",
-            "Fielding Law Firm",
-            "Frenkel & Frenkel LLP",
-            "Geico",
-            "Gordon McKernan Injury Attorney Law",
-            "HARTFORD",
-            "Harrell & Paulson, LLP",
-            "Hernandez, Medina & Baggett Law Firm",
-            "Law Offices of Houston M. Smith",
-            "McCraw Law Group",
-            "Patricia Morgan Law PLLC",
-            "Progressive",
-            "Smith & Lee, Injury Lawyers",
-            "State Farm Insurance",
-            "State Farm",
-            "Stewart J Guss Attorney",
-            "Stewart J Guss",
-            "The Gooch Law Firm PLLC",
-            "The Law Office of Bryce Carpenter"
-
-        ]
-      },
       {
         "name": "positive_balance",
         "column": "balance",
